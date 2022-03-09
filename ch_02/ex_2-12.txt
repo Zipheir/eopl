@@ -1,0 +1,58 @@
+# Exercise 2.12
+
+Here's the stack interface, again:
+
+empty-stack : Stack
+(empty-stack) = ⌈∅⌉
+
+push : α × Stack → Stack
+(push ⌈x⌉ ⌈[s₁, …]⌉) = ⌈[x, s₁, …]⌉
+
+top : Stack-of(α) → α
+(top ⌈[s₁, …]⌉) = ⌈s₁⌉
+
+pop : Stack-of(α) → α × Stack-of(α)
+(pop ⌈[s₁, s₂, …]⌉) = ⌈(s₁, [s₂, …])⌉
+
+Implementing this procedurally is not quite as trivial as the
+one-star exercise rating suggests (as usual).  The stack could
+be represented by a nullary procedure which “pops” when invoked:
+
+;; empty-stack : Stack
+(define (empty-stack)
+  (lambda () (error #f "empty stack")))
+
+;; push : α × Stack → Stack
+(define (push val stack)
+  (lambda () (values val stack)))
+
+;; pop : Stack-of(α) → α × Stack-of(α)
+(define (pop stack) (stack))
+
+;; top : Stack-of(α) → α
+(define (top stack)
+  (let-values (((val _) (stack)))
+    val))
+
+This is fine, although the implementation of ‘top’ is a little weird.
+Another way, which will be familiar to SICP folks, is to use message
+passing; it’s rather unnecessary, but it makes the definitions of
+pop and top very concise:
+
+;; empty-stack : Stack
+(define (empty-stack)
+  (lambda (msg) (error #f "empty stack")))
+
+;; push : α × Stack → Stack
+(define (push val stack)
+  (lambda (msg)
+    (case msg
+      ((pop) (values val stack))
+      ((top) val)
+      (else (error #f "unhandled message" msg)))))
+
+;; pop : Stack-of(α) → α × Stack-of(α)
+(define (pop stack) (stack 'pop))
+
+;; top : Stack-of(α) → α
+(define (top stack) (stack 'top))

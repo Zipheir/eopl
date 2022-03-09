@@ -1,0 +1,34 @@
+# Exercise 2.14
+
+Adding has-binding? to the Ex. 2.13 env representation can’t be done
+without some reworking.  At the moment, you search an environment by
+applying one of the component procedures of its rep., and this raises
+an exception if nothing is found.  This has to change.  I use success
+and failure continuations here to avoid the value-or-failure problem
+that arises when returning #f on a failed search.
+
+;; empty-env : () → Env
+(define (empty-env)
+  (list (lambda (_v _s failure) (failure))
+        (lambda () #t)))
+
+;; empty-env? : Env → Bool
+(define (empty-env? env) ((cadr env)))
+
+;; extend-env : Var × Scheme-val × Env → Env
+(define (extend-env var val env)
+  (list (lambda (search-var success failure)
+          (if (eqv? var search-var)
+              (success val)
+              ((car env) var success failure)))
+        (lambda () #f)))
+
+;; apply-env : Env × Var → Scheme-val
+(define (apply-env env var)
+  ((car env) var
+             values
+             (lambda () (report-no-binding-found var))))
+
+;; has-binding? : Env × Var → Bool
+(define (has-binding? env var)
+  ((car env) var (lambda (_) #t) (lambda () #f)))

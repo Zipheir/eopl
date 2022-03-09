@@ -1,0 +1,27 @@
+# Exercise 2.13
+
+I'm to extend the procedural environment implementation to provide
+empty-env?.  While the idea is to use two procedures, a message
+passing structure also works fine as well.
+
+;; empty-env : () → Env
+(define (empty-env)
+  (list (lambda (var) (report-no-binding-found var))
+        (lambda () #t)))
+
+;; empty-env? : Env → Bool
+(define (empty-env? env) ((cadr env)))
+
+;; extend-env : Var × Scheme-val × Env → Env
+(define (extend-env var val env)
+  (list (lambda (search-var)
+          (if (eqv? var search-var)
+              val
+              (apply-env env search-var)))
+        (lambda () #f)))
+
+;; apply-env : Env × Var → Scheme-val
+(define (apply-env env var)
+  (if (empty-env? env)
+      (report-no-binding-found var)
+      ((car env) var)))

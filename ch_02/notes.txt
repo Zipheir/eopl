@@ -49,7 +49,7 @@ semantics, since it does not check that ⌈n⌉ ≥ holds.
 If a type’s representation cannot be exposed, it is called an opaque
 type; otherwise, it’s called transparent.
 
-## 2.2.1 The environment interface
+### 2.2.1 The environment interface
 
 An environment is a function from a finite set of variables to Scheme
 values.  The interface:
@@ -69,11 +69,63 @@ operations, a grammar for environment expressions is pretty easy:
 Env-exp ::= (empty-env)
         ::= (extend-env Identifier Scheme-value Env-exp)
 
-The interpreter recipe:
+> The interpreter recipe:
+>
+> 1. Look at a piece of data.
+>
+> 2. Decide what kind of data it represents.
+>
+> 3. Extract the components of the datum and do the right thing with
+>    them.
 
-1. Look at a piece of data.
+The first representation is a rather direct implementation of the
+above interface using tagged lists. (p. 38)
 
-2. Decide what kind of data it represents.
+### Procedural representation
 
-3. Extract the components of the datum and do the right thing with
-   them.
+Since environments are functions, they can be intuitively implemented
+as procedures. (p. 40)
+
+“Proceduralization” of a data type with a single observer:
+
+> 1. Identify the lambda expressions in the client code whose
+> evaluation yields values of the type.  Create a constructor
+> procedure for each such lambda expression.  The parameters
+> of the constructor procedure will be the free variables of
+> the lambda expression.  Replace each such lambda expression
+> in the client code by an invocation of the corresponding
+> constructor.
+>
+> 2. Define an ‘apply-’ procedure ….  Identify all the places
+> in the client code, including the bodies of the constructor
+> procedures, where a value of the type is applied [eliminated?].
+> Replace each such application by an invocation of the ‘apply-’
+> procedure.
+
+(p. 41)  This takes some thinking.  I know Dan Friedman likes
+these “recipes”, but it would be nice to have a formal model
+of what this process means.
+
+If the implementation language doesn’t have first-class
+procedures, one could do the above, then *defunctionalize*.
+This is much like the representation of environments (which are
+functions in their specification) by data structures.
+
+“The relation between procedural and defunctionalized representations
+will be a recurring theme in this book.”
+
+## 2.3 Interfaces for recursive data types
+
+> Designing an interface for a recursive data type
+>
+> 1. Include one constructor for each kind of data in the data type.
+>
+> 2. Include one predicate for each kind of data in the data type.
+>
+> 3. Include one extractor for each piece of data passed to a
+>    constructor of the data type.
+
+(3) is an interesting way to think about the model: If we pass data
+in, we probably want a way to get it out.
+
+
