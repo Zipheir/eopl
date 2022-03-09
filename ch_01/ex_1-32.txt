@@ -1,0 +1,12 @@
+# Exercise 1.32
+
+;; double-tree : Bintree → Bintree
+;; Usage: double-tree returns a tree with the same structure as t
+;; but with each leaf integer doubled.
+(define (double-tree t)
+  (if (leaf? t)
+      (leaf (* (contents-of t) 2))
+      (interior-node
+       (contents-of t)
+       (double-tree (lson t))
+       (double-tree (rson t)))))

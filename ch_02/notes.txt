@@ -1,0 +1,79 @@
+# 2: Data Abstraction
+
+## 2.1
+
+Notation: ⌈v⌉ will denote “the representation of data v”.
+
+An example: the natural numbers.  The interface here consists of
+four procedures satisfying the following equations:
+
+(zero) = ⌈0⌉
+                 ⎧ #t   n = 0
+(is-zero? ⌈n⌉) = ⎨
+                 ⎩ #f   n ≠ 0
+
+(successor ⌈n⌉) = ⌈n + 1⌉   (n ≥ 0)
+
+(predecessor ⌈n + 1⌉) = ⌈n⌉   (n ≥ 0)
+
+Why the ≥ 0 condition on successor (but not on is-zero?)?
+
+This is very reminscent of a denotational semantics for the
+language consisting of these procedures!
+
+Using this interface:
+
+(define plus
+  (lambda (x y)
+    (if (is-zero? x)
+        y
+        (successor (plus (predecessor x) y)))))
+
+This satisfies the equation (plus ⌈x⌉ ⌈y⌉) = ⌈x + y⌉.
+
+A unary representation:
+
+⌈0⌉ = ()
+⌈n + 1⌉ = (#t . ⌈n⌉)
+
+Then the procedures are defined by
+
+(define (zero) '())
+(define (is-zero? n) (null? n))
+(define (successor n) (cons #t n))
+(define (predecessor n) (cdr n))
+
+Note that the definition of successor doesn’t exactly satisfy its
+semantics, since it does not check that ⌈n⌉ ≥ holds.
+
+If a type’s representation cannot be exposed, it is called an opaque
+type; otherwise, it’s called transparent.
+
+## 2.2.1 The environment interface
+
+An environment is a function from a finite set of variables to Scheme
+values.  The interface:
+
+(empty-env) = ⌈∅⌉
+
+(apply-env ⌈f⌉ var) = f(var)
+
+(extend-env var v ⌈f⌉) = ⌈g⌉
+                  ⎧ v       if var₁ = var
+  where g(var₁) = ⎨
+                  ⎩ f(var₁) otherwise
+
+Since every environment can be built up by successive extend-env
+operations, a grammar for environment expressions is pretty easy:
+
+Env-exp ::= (empty-env)
+        ::= (extend-env Identifier Scheme-value Env-exp)
+
+The interpreter recipe:
+
+1. Look at a piece of data.
+
+2. Decide what kind of data it represents.
+
+3. Extract the components of the datum and do the right thing with
+   them.

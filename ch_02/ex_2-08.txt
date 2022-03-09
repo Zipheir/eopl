@@ -1,0 +1,13 @@
+# Exercise 2.8
+
+The interface for the new form:
+
+                   ⎧ #t  if f = ∅
+(empty-env? ⌈f⌉) = ⎨
+                   ⎩ #f  otherwise
+
+The alist implementation is very exciting.
+
+;; empty-env? : Env → Bool
+(define (empty-env? env)
+  (null? env))

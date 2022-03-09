@@ -1,0 +1,22 @@
+# Exercise 1.5
+
+NTS: If e ∈ LcExp, then there are the same number of left and
+right parens in e.
+
+Here’s grammar for LcExp again:
+
+LcExp ::= Identifier
+      ::= (lambda (Identifier) LcExp)
+      ::= (LcExp LcExp)
+
+Proof: By structural induction.
+
+An LcExp which is just an Identifier contains 0 left and
+0 right parens, so the hypothesis holds of this simple case.
+
+I have two inductive cases.  In the first case, assume le satisfies
+the hypothesis (k left and right parens) in (lambda (i) le).  Then
+the whole expression contains k + 2 left and k + 2 right parens, as
+required.  In the second case, assume le₁ contains k left/right parens
+and le₂ contains j in (le₁ le₂).  Then the expression contains a total
+of k + j + 1 left/right parens, as required. ∎

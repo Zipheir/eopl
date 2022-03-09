@@ -1,0 +1,28 @@
+# Exercise 1.33
+
+There is some duplication here, since the root node is not counted.
+I've also included some checking on the root node.
+
+;; mark-leaves-with-red-depth : Bintree → Bintree
+;; Usage: Returns a tree with the same structure as t, except that
+;; each leaf contains the number of nodes between it and the root
+;; (which must be labelled with 'red).
+(define (mark-leaves-with-red-depth t)
+  (if (leaf? t)
+      (error 'mark-leaves-with-red-depth "no root" t)
+      (if (eqv? 'red (contents-of t))
+          (interior-node
+           'red
+           (mark-leaves-from 0 (lson t))
+           (mark-leaves-from 0 (rson t)))
+          (error 'mark-leaves-with-red-depth "root is not red" t))))
+
+;; mark-leaves-from : Int × Bintree → Bintree
+;; Usage: Replaces each leaf in t with its depth, starting from n.
+(define (mark-leaves-from n t)
+  (if (leaf? t)
+      (leaf n)
+      (interior-node
+       (contents-of t)
+       (mark-leaves-from (+ n 1) (lson t))
+       (mark-leaves-from (+ n 1) (rson t)))))

@@ -1,0 +1,40 @@
+# Exercise 1.31
+
+Here’s the grammar for binary trees again:
+
+Bintree ::= Int | (Symbol Bintree Bintree)
+
+Now the procedures.
+
+;; leaf : Int → Bintree
+;; Usage: leaf takes an integer n and returns a new leaf tree.
+(define (leaf n) n)
+
+;; interior-node : Sym × Bintree × Bintree → Bintree
+;; Usage: interior-node constructs a branch tree from a symbol
+;; s and two subtrees.
+(define (interior-node s l r) (list s l r))
+
+;; leaf? : Scheme-Val → Bool
+;; Usage: leaf? is #t if its argument is a leaf tree, and #f otherwise.
+(define (leaf? x) (integer? x))
+
+;; lson : Bintree → Bintree
+;; Usage: lson returns the left subtree of an interior node.
+(define (lson t)
+  (if (leaf? t)
+      (error 'lson "tree is a leaf" t)
+      (cadr t)))
+
+;; rson : Bintree → Bintree
+;; Usage: rson returns the right subtree of an interior node.
+(define (rson t)
+  (if (leaf? t)
+      (error 'rson "tree is a leaf" t)
+      (caddr t)))
+
+;; contents-of : Bintree → Sym + Int
+;; Usage: Returns the value contained in a node, which is either an
+;; integer (for leaves) or a symbol (for interior nodes).
+(define (contents-of t)
+  (if (leaf? t) t (car t)))

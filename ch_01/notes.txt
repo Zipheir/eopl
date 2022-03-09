@@ -1,0 +1,234 @@
+# Recursively specified data
+
+Three kinds of recursive definitions:
+
+"Top-down":
+
+A natural number n is in S if and only if
+
+1. n = 0, or
+
+2. n - 3 ∈ S.
+
+"Bottom-up":
+
+Define S to be the smallest set ⊆ ℕ satisfying
+
+1. 0 ∈ S, and
+
+2. if n ∈ S, then n + 3 ∈ S.
+
+"Rules of inference":
+
+
+-------
+ 0 ∈ S
+
+  n ∈ S
+-----------
+ n + 3 ∈ S
+
+The assumtion is that m ∈ S iff the statement "m ∈ S" can be derived
+by applying these rules finitely many times.  "This interpretation
+automatically makes S the smallest set that is closed under the rules."
+
+Integers and lists of integers, three equivalent defintions.
+
+## Definition 1.1.3 (top-down)
+
+A Scheme list is a list of integers (List-of-Int) if and only if either
+
+1. it is the empty list, or
+
+2. it is a pair whose car is an Int and whose cdr is a List-of-Int.
+
+## Definition 1.1.4 (bottom-up)
+
+The set List-of-Int is the smallest set of Scheme lists satisfying the
+following two properties:
+
+1. () ∈ List-of-Int, and
+
+2. if n ∈ Int and l ∈ List-of-Int, then (n . l) ∈ List-of-Int.
+
+## Definition 1.1.5 (rules of inference)
+
+() ∈ List-of-Int
+
+n ∈ Int     l ∈ List-of-Int
+---------------------------
+  (n . l) ∈ List-of-Int
+
+# Grammars
+
+A higher-level way of specifying sets.  Not just for strings!
+
+The List-of-Int grammar:
+
+List-of-Int ::= ()
+List-of-Int ::= (Int . List-of-Int)
+
+Each rule is called a production.  The left-hand side of a production
+must be a nonterminal symbol, while the RHS can combine terminals and
+nonterminals.  (Int here is an unspecified nonterminal which is assumed
+to be clear from context.)
+
+Other conventions.  The following are shorthands for the above grammar:
+
+List-of-Int ::= ()
+            ::= (Int . List-of-Int)
+
+and
+
+List-of-Int ::= () | (Int . List-of-Int)
+
+Another version using the Kleene star:
+
+List-of-Int :: ({Int}*)
+
+(I think this version is only equivalent if you keep some syntactic
+translations in mind, i.e. that (x) ≡ (x . ()).  Why does it seem like
+grammars are specifying syntax while recursive definitions are giving
+semantics?  Just a matter of flavor, I guess.)
+
+The Kleene star makes for a concise definition, but it hides
+the recursive structure of the grammar.
+
+Separated list notation: {Int}*^(c) will denote any number of Ints
+separated by the non-empty sequence c.  {Int}*^(,) denotes:
+
+8
+1,2
+3,4,5
+
+etc.  (In the text, spaces are inserted after the , character.)
+
+Syntactic derivation: Is (14 . ()) a List-of-Int?
+
+List-of-Int
+⇒ (Int . List-of-Int)
+⇒ (14 . List-of-Int)
+⇒ (14 . ())
+
+The order of rule application is assumed to be irrelevant.
+
+## Useful sets
+
+### Def. 1.1.6 (s-list, s-exp)
+
+S-list ::= ({S-exp}*)
+S-exp  ::= Symbol | S-list
+
+### Def. 1.1.7 (binary tree)
+
+Bintree ::= Int | (Symbol Bintree Bintree)
+
+This is rather weird; why the Symbol element?
+
+### Def. 1.1.8 (lambda [calculus] expression)
+
+LcExp ::= Identifier
+      ::= (lambda (Identifier) LcExp)
+      ::= (LcExp LcExp)
+
+An Identifier is any symbol other than ‘lambda’.
+
+“These grammars are said to be context-free because a rule defining
+a given syntactic category may be applied in any context that makes
+reference to that syntactic category.” (p. 10)
+
+Context-free grammars are not sufficient to define some sets.  For
+example, the grammar
+
+Binary-search-tree ::= () | (Int Binary-search-tree Binary-search-tree)
+
+yields elements that are not valid binary trees, since the constraint
+on the Int components is not observed (if (k l r) is a binary search
+tree, then every Int element of l is ≤ k and every Int element of r
+is > k).  “Such constraints are called context-sensitive constraints
+or invariants.”
+
+## Induction
+
+Our favorite, the structural induction proof strategy:
+
+> To prove that a proposition IH(s) is true for all structures [of a
+> given type] s, prove the following:
+>
+> 1. IH is true on simple structures (those without substructures).
+> 2. If IH is true on the substructures of s, then it is true on
+>    s itself.
+
+## Deriving recursive programs
+
+Much of this section is very familiar from The Little Schemer and
+elsewhere.
+
+Contracts, though they are comments in the executable code, are
+very much like (potentially dependent, though probably informally
+specified) types.
+
+### occurs-free?
+
+Now here’s something a little different.  occurs-free? takes a
+variable var (represented by a Scheme symbol) and a λ calculus
+expression exp and determines whether var occurs free in exp.
+This function must follow the LcExp grammar.  Here's the
+not-so-readable version:
+
+;; occurs-free? : Sym × LcExp → Bool
+;;
+;; Usage: Returns #t if the symbol var occurs free in exp,
+;; otherwise returns #f.
+(define occurs-free?
+  (lambda (var exp)
+    (cond ((symbol? exp) (eqv? var exp))
+          ((eqv? (car exp) 'lambda)  ; abstraction
+           (and (not (eqv? var (car (cadr exp))))
+                (occurs-free? var (caddr exp))))
+          (else                      ; application
+           (or (occurs-free? var (car exp))
+               (occurs-free? var (cadr exp)))))))
+
+### subst
+
+This procedure replaces a symbol ‘old’ with a symbol ‘new’ throughout
+an S-list.  Since S-lists were defined with the Kleene star, their
+grammar has to be expanded.
+
+S-list ::= ()
+       ::= (S-exp . S-list)
+
+S-exp  ::= Symbol | S-list
+
+subst is divided into two procedures, one for each of the nonterminals
+in the grammar above.
+
+;; subst : Sym × Sym × S-list → S-list
+(define subst
+  (lambda (new old slist)
+    (if (null? slist)
+        '()
+        (cons (subst-in-s-exp new old (car slist))
+              (subst new old (cdr slist))))))
+
+;; subst-in-s-exp : Sym × Sym × S-exp → S-exp
+(define subst-in-s-exp
+  (lambda (new old sexp)
+    (if (symbol? sexp)
+        (if (eqv? sexp old) new sexp)
+        (subst new old sexp))))
+
+“Since we have strictly followed the definition of S-list and S-exp,
+this recursion is guaranteed to halt.”  It seems like this needs a
+proof.
+
+The decomposition of subst into two mutually-recursive procedures,
+one for each syntactic category, is an important technique.
+
+## 1.3 Aux. procedures and context arguments
+
+“No Mysterious Auxiliaries!” (p. 23)
+
+A _context argument_ is an argument to a procedure which describes
+in some way “the context in which we are working”.

@@ -1,0 +1,16 @@
+# Exercise 2.9
+
+Interface:
+
+                         ⎧ #t  if var ∈ preimage(f)
+(has-binding? ⌈f⌉ var) = ⎨
+                         ⎩ #f  otherwise
+
+This spec is a little awkward.  Is there a better way to express it
+than in terms of the preimage of the environment?
+
+The concise alist implementation:
+
+;; has-binding? : Env × Var → Bool
+(define (has-binding? env var)
+  (and (assv var env) #t))

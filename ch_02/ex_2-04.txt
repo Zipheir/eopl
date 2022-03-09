@@ -1,0 +1,25 @@
+# Exercise 2.4
+
+Stacks are finite sequences.  I’ll use ∅ and […] to denote sequences
+in order to avoid confusion with Scheme lists.  Because the
+specification becomes much more complex with mutation, these will be
+"pure" stacks.  The interface, first attempt:
+
+empty-stack : Stack
+(empty-stack) = ⌈∅⌉
+
+push : α → Stack → Stack
+(push ⌈x⌉ ⌈[s₁, …]⌉) = ⌈[x, s₁, …]⌉
+
+push : Stack-of(α) → α
+(top ⌈[s₁, …]⌉) = ⌈s₁⌉
+
+pop : Stack-of(α) → α × Stack-of(α)
+(pop ⌈[s₁, s₂, …]⌉) = ⌈(s₁, [s₂, …])⌉
+
+The constructors are empty-stack and push, while top and pop are
+the eliminators.
+
+In this stateless setting, it might make sense to replace pop
+with a function that just returns the rest of the stack (i.e.
+without the top).  Still, this version is convenient.

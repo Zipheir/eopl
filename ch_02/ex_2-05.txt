@@ -1,0 +1,19 @@
+# Exercise 2.5
+
+Here's the alist implementation.  The error procedures are identical
+to those in the text’s Figure 2.1 (p. 38).
+
+;; Env = () | ((Var . SchemeVal) . Env)
+;; Var = Sym
+
+;; empty-env : () → Env
+(define (empty-env) '())
+
+;; extend-env : Var × SchemeVal × Env → Env
+(define (extend-env var val env)
+  (cons (cons var val) env))
+
+;; apply-env : Env × Var → SchemeVal
+(define (apply-env env search-var)
+  (cond ((assv search-var env) => cdr)
+        (else (report-no-binding-found search-var))))

@@ -1,0 +1,8 @@
+# Exercise 1.13
+
+The version of subst following the ({S-exp}*) grammar:
+
+(define (subst new old sexp)
+  (map (lambda (e) (subst-in-s-exp new old e)) sexp))
+
+No changes to subst-in-s-exp are needed.
