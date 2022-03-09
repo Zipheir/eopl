@@ -8,10 +8,10 @@ specification becomes much more complex with mutation, these will be
 empty-stack : Stack
 (empty-stack) = ⌈∅⌉
 
-push : α → Stack → Stack
+push : α × Stack → Stack
 (push ⌈x⌉ ⌈[s₁, …]⌉) = ⌈[x, s₁, …]⌉
 
-push : Stack-of(α) → α
+top : Stack-of(α) → α
 (top ⌈[s₁, …]⌉) = ⌈s₁⌉
 
 pop : Stack-of(α) → α × Stack-of(α)
