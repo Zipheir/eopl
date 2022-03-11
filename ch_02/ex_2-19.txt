@@ -1,0 +1,3 @@
+# Exercise 2.19
+
+See src/bintree.scm for the implementation.
