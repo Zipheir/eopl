@@ -1,0 +1,127 @@
+# Chapter 3: Expressions
+
+Binding and scope of variables, illustrated through a number of
+little languages with environments.
+
+In each case, this means writing an interpreter, or possibly a
+compiler and interpreter (for the target language).
+
+Regardless, a *front end* will be used to translate a program
+into a value (an “abstract syntax tree”) behaving as an internal
+representation.
+
+This involves scanning and parsing.  An alternative when working
+in Lisp is to write a language in S-expression form and just use
+‘read’ to do all of that.
+
+## 3.2 LET: A simple language
+
+The grammar for LET (figure 3.2):
+
+Program ::= Expression
+            [a-program (exp1)]
+
+Expression ::= Number
+               [const-exp (num)]
+
+           ::= - (Expression , Expression)
+               [diff-exp (exp1 exp2)]
+
+           ::= zero? Expression
+               [zero?-exp (exp1)]
+
+           ::= if Expression then Expression else Expression
+               [if-exp (exp1 exp2 exp3)]
+
+           ::= Identifier
+               [var-exp (var)]
+
+           ::= let Identifier = Expression in Expression
+               [let-exp (var exp1 body)]
+
+### 3.2.2
+
+Each language manipulates at least two sets of values: expressed
+values and denoted values.  Here, the former are “the possible
+values of expressions”, and the latter are “the values bound to
+variables”. (p. 61)
+
+This is interesting, although the use of the term “denoted” seems a
+bit confusing.  Clearly there are languages in which “locations in
+a store” are denoted values, and even possibly expressed values (as
+in C).
+
+In LET and other languages of this chapter, the two sets of values
+are the same:
+
+Exp-Val = Int + Bool
+Den-Val = Int + Bool
+
+These are types with the obvious constructors, num-val and bool-val,
+and extractors, expval->num and expval->bool (undefined when given
+the wrong disjunct).
+
+### 3.2.2 Environments
+
+Once again, environments are functions from a finite set of names
+to Den-Val, the set of denoted values.  The following language
+is used for talking about environments:
+
+• ρ ranges over environments.
+
+• [] denotes the empty environment.
+
+• [var = val]ρ denotes (extend-env var val ρ).
+
+• [var₁ = val₁, var₂ = val₂]ρ ≡ [var₁ = val₁]([var₂ = val₂]ρ), etc.
+
+• [var₁ = val₁, var₂ = val₂, …] denotes the environment in which
+  var₁ is bound to val₁, and so on.
+
+### 3.2.4 Specifying the behavior of expressions
+
+The core procedure for making sense of the LET language is the
+observer value-of : Exp × Env → Exp-Val, which is, of course,
+the interpreter.
+
+The (incomplete) specification of value-of (p. 62):
+
+> (value-of (const-exp n) ρ) = (num-val n)
+>
+> (value-of (var-exp var) ρ) = (apply-env ρ var)
+>
+> (value-of (diff-exp exp₁ exp₂) ρ) =
+>   (num-val (- (expval->num (value-of exp₁ ρ))
+>               (expval->num (value-of exp₂ ρ))))
+
+Note that, to evaluate a diff-exp, the operands are evaluated,
+the numeric values extracted and subtracted, then the difference
+is expressed as a num-val (i.e. “brought back into” the Exp-Val
+type).
+
+Shorthands:
+
+⌈n⌉   ≡ (num-val n)
+⌊val⌋ ≡ (expval->num val)
+
+(And similarly for bool-val and expval->bool.)  In addition,
+«exp» denotes the tree-type internal representation for exp.
+The the above spec. for value-of can be rewritten more concisely:
+
+(value-of «n» ρ) = ⌈n⌉
+
+(value-of «var» ρ) = (apply-env ρ var)
+
+(value-of «-(exp₁, exp₂)») =
+  ⌈(- ⌊(value-of «exp₁» ρ)⌋ ⌊(value-of «exp₂» ρ)⌋)⌉
+
+
+In the LET language, a program is an expression, so finding the
+value of a program is just a matter of evaluating it in some
+initial environment.
+
+### 3.2.6 Specifying conditionals
+
+This section adds the interface for booleans in LET.
+
+
