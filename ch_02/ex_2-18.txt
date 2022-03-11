@@ -1,0 +1,9 @@
+# Exercise 2.18
+
+The grammar for non-empty "bidirectional" sequences:
+
+Node-in-sequence ::= (Int List-of(Int) List-of(Int))
+
+These are zippers of integers.
+
+The implementation is found in src/zipper-sequence.scm.
