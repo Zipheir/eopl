@@ -1,0 +1,27 @@
+# Exercise 2.29
+
+The extended Lc-exp grammar:
+
+Lc-exp ::= Identifier
+           [var-exp (var)]
+
+       ::= (lambda ({Identifier}*) Lc-exp)
+           [lambda-exp (bound-vars body)]
+
+       ::= (Lc-exp {Lc-exp}*)
+           [app-exp (rator rands)]
+
+Here's the type, using R6RS records.
+
+(define-record-type (<var-exp> var-exp var-exp?)
+  (fields (immutable var)))
+
+(define-record-type (<lambda-exp> lambda-exp lambda-exp?)
+  (fields (immutable bound-vars)
+          (immutable body)))
+
+(define-record-type (<app-exp> app-exp app-exp?)
+  (fields (immutable rator)
+          (immutable rands)))
+
+For the rest, see src/lc-exp-posary.scm
