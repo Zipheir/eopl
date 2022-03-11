@@ -1,0 +1,21 @@
+;;; Basic SRFI-64-esque test form.
+(define-syntax test
+  (syntax-rules ()
+    ((test expect expr)
+     (let ((expect-val expect)
+           (expr-val expr))
+       (cond ((equal? expect-val expr-val)
+              (display "Test passed: ")
+              (display 'expr)
+              (display " => ")
+              (display expect-val)
+              (newline))
+             (else
+              (display "TEST FAILED: ")
+              (display 'expr)
+              (newline)
+              (display "  Expected ")
+              (display expect-val)
+              (display ", got ")
+              (display expr-val)
+              (newline)))))))
