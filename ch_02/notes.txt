@@ -128,4 +128,42 @@ will be a recurring theme in this book.”
 (3) is an interesting way to think about the model: If we pass data
 in, we probably want a way to get it out.
 
+## 2.5 Abstract syntax and its representation
 
+The grammars so far have been *concrete*, i.e. they give an external
+representation (as strings) of a data type.  But other string reps.
+could be used, e.g. the alternate Lc-exp grammar:
+
+Lc-exp ::= Identifier
+       ::= ‘proc’ Identifier ‘=>’ Lc-exp
+       ::= Lc-exp ‘(’ Lc-exp ‘)’
+
+(Quoted strings are literals.)
+
+Some kind of internal representation, an *abstract syntax*, could be
+used to unify all of these concrete variants.  (But is “abstract” the
+best term for this kind of thing?  Is “syntax”?  Something about the
+distinction between “abstract syntax” and “concrete syntax” seems
+wrong.)
+
+The abstract syntax will take the form of a tree (graph).  Nodes
+are labelled with constructors and edges are labelled with
+extractors. (see p. 52)
+
+A new notation specifies both a concrete and abstract syntax for
+a type:
+
+Lc-exp ::= Identifier
+           [var-exp (var)]
+
+       ::= ‘(lambda (’ Identifier ‘)’ Lc-exp ‘)’
+           [lambda-exp (bound-var body)]
+
+       ::= ‘(’ Lc-exp Lc-exp ‘)’
+           [app-exp (rator rand)]
+
+The abstract syntax is given by the [bracketed] expressions.
+
+To derive an abstract syntax expression from concrete syntax, we
+need a parser.  Conversely, an unparser translates abstract syntax
+into some concrete syntax.
