@@ -1,0 +1,115 @@
+# Exercise 3.9
+
+Lists for LET.  The interesting question here is whether list
+expressions denote lists of denoted values or of expressed values.
+I'm going to use lists of expressed values internally (see below
+as to why).
+
+The semantics:
+
+----------------------------------- I-null
+(value-of empty-list-exp ρ) = ⌈()⌉
+
+
+ (value-of obj-exp ρ) = val₁    (value-of list-exp ρ) = val₂
+------------------------------------------------------------- I-cons
+    (value-of (cons-exp obj-exp list-exp) ρ) =
+          ⌈(cons val₁ ⌊val₂⌋)⌉
+
+
+               (value-of list-exp ρ) = val
+------------------------------------------------------------- E-car
+                                ⎧ ⊥             if ⌊val⌋ = ()
+(value-of (car-exp list-exp)) = ⎨
+                                ⎩ (car ⌊val⌋)   otherwise
+
+
+               (value-of list-exp ρ) = val
+------------------------------------------------------------- E-cdr
+                                ⎧ ⊥             if ⌊val⌋ = ()
+(value-of (cdr-exp list-exp)) = ⎨
+                                ⎩ ⌈(cdr ⌊val⌋)⌉ otherwise
+
+
+       (value-of list-exp ρ) = val
+---------------------------------------- E-null?
+ (value-of (null?-exp list-exp) ρ) =
+    ⌈(null? ⌊val)⌉
+
+I have to extend the set of exp-vals to include list-vals, and I'll
+need the following projection:
+
+;; expval->list : Exp-val → List-of(Exp-val)
+(define (expval->list val)
+  (if (list-val? val)
+      (list-val-list val)
+      (report-expval-extractor-error 'list val)))
+
+Since the expressed value for the empty list is a constant, I'll
+define it as such.
+
+(define null-val (list-val '()))
+
+Having added support for expressed list values, value-of is extended
+with the following clauses.
+
+(define (value-of exp env)
+  (cond ; ...
+        ((empty-list-exp? exp) null-val)
+
+        ; Note: The new car value is not converted!
+        ((cons-exp? exp)
+         (let ((ov (value-of (cons-exp-obj-exp exp) env))
+               (lv (value-of (cons-exp-list-exp exp) env)))
+           (list-val (cons ov (expval->list lv)))))
+
+        ; Note: The car value is not converted!
+        ((car-exp? exp)
+         (let* ((val (value-of (car-exp-exp1 exp) env))
+                (xs (expval->list val)))
+           (if (null? xs)
+               (error 'value-of "car: empty list" xs)
+               (car xs))))
+
+        ((cdr-exp? exp)
+         (let* ((val (value-of (cdr-exp-exp1 exp) env))
+                (xs (expval->list val)))
+           (if (null? xs)
+               (error 'value-of "car: empty list" xs)
+               (list-val (cdr xs)))))
+
+        ((null?-exp? exp)
+         (let ((xs (expval->list (value-of (null-exp-exp1 exp) env))))
+           (if (null? xs) (bool-val #t) (bool-val #f))))
+
+        ; ...
+        ))
+
+What happens when I try the other approach, i.e. “unwrapping” the
+list values?  Consider the semantics for cons, without the bracket
+shorthands:
+
+ (value-of obj-exp ρ) = val₁    (value-of list-exp ρ) = val₂
+------------------------------------------------------------- I-cons
+    (value-of (cons-exp obj-exp list-exp) ρ) =
+        (list-val (cons (??? val₁) (expval->list val₂)))
+
+What expressed-value extractor should be applied to val₁?  There’s
+no way to know in the current language.  Dually, the semantics for
+car would have another unfillable hole:
+
+               (value-of list-exp ρ) = val
+------------------------------------------------------------- E-car
+(value-of (car-exp list-exp)) =
+         ⎧ ⊥                              if (expval->list val) = ()
+         ⎨
+         ⎩ (??? (car (expval->list val))) otherwise
+
+What expval constructor should replace the ‘?’s?
+
+Basically, this is a polymorphic list type.  At the moment, it's
+not even homogenous!  Trying to represent the arbitrary values of
+a list uniformly thus pushes the language toward a Lisp-object-style
+“universal disjoint union type” for values.  So it seems like the
+simplest option, for now, is to leave the list elements as opaque
+expressed values.
