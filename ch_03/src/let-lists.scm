@@ -43,6 +43,9 @@
 (define-record-type (null?-exp null?-exp null?-exp?)
   (fields exp1))
 
+(define-record-type list-exp
+  (fields exps))
+
 (define (expression? obj)
   (or (const-exp? obj)
       (diff-exp? obj)
@@ -54,7 +57,8 @@
       (cons-exp? obj)
       (car-exp? obj)
       (cdr-exp? obj)
-      (null?-exp? obj)))
+      (null?-exp? obj)
+      (list-exp? obj)))
 
 ;;; Checking constructors.
 
@@ -246,6 +250,10 @@
         ((null?-exp? exp)
          (let ((xs (expval->list (value-of (null-exp-exp1 exp) env))))
            (if (null? xs) (bool-val #t) (bool-val #f))))
+        ((list-exp? exp)
+         (let ((vals (map (lambda (e) (value-of e env))
+                          (list-exp-exps exp))))
+           (list-val vals)))
         (else (error 'value-of "invalid expression" exp))))
 
 ;; Parser for a simple S-exp representation.  The f(x, y) notation
@@ -264,6 +272,7 @@
     ((car ,e-lis) (car-exp (parse e-lis)))
     ((cdr ,e-lis) (cdr-exp (parse e-lis)))
     ((null? ,e-lis) (null?-exp (parse e-lis)))
+    ((list . ,es) (map parse es))
     (? (error 'parse "invalid syntax" sexp))))
 
 ;; parse-program : List → Program

@@ -1,0 +1,39 @@
+# Exercise 3.10
+
+This builds on the previous exercise.  I assume that all of the
+constructs added there are available.  Here’s a recursive attempt
+at the semantics:
+
+(value-of (list-exp) ρ) = empty-list-exp
+
+(value-of (list-exp e₁ e₂ … eₙ) ρ) =
+  (cons-exp (value-of e₁ ρ) (list-exp e₂ … eₙ))
+
+But this cannot be directly translated into an expression type in
+LET, due to the arbitrary collection of argument extractors I’d need.
+This is the first variadic procedure in LET, so some choice of
+representation has to be made.
+
+I’ll assume that the parser helpfully collects the arguments to
+‘list’ in a list.  This is the parsing rule, expressed informally
+in terms of the syntax from the text:
+
+(parse list(e₁, …, eₙ)) => (list-exp (map parse (e₁ … eₙ)))
+
+With this, the semantics are simple:
+
+(value-of (list-exp exps) ρ) = ⌈(map (lambda (exp)
+                                       (value-of exp ρ))
+                                     exps)⌉
+
+and most of the implementation work for ‘list’ is done.  Here’s the
+new clause for value-of:
+
+(define (value-of exp env)
+  (cond ; ...
+        ((list-exp? exp)
+         (list-val
+          (map (lambda (e) (value-of e env))
+               (list-exp-list exp))))
+        ; ...
+        ))
