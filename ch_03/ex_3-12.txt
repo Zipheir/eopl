@@ -1,0 +1,71 @@
+# Exercise 3.12
+
+Now I want to add a cond expression.  As with varidic procedures,
+this requires some way to collect the clauses, of which there are
+an arbitrary number.  Define the cond-exp constructor by:
+
+cond-exp : List-of(Exp × Exp) → Exp
+
+cond-exp-clauses : Cond-exp → List-of(Exp × Exp)
+
+In other words, a cond expression is represented by a list of
+clauses, each of which is a pair of expressions (test and
+consequent).  (Of course, this structure is just a list, not a
+list-val, because it’s not an expressed value of the language.)
+
+Now, the semantics:
+
+(value-of (cond-exp cs) ρ) =
+  (if (null? cs)
+      ⊥   ; error
+      (let ((c1 (car cs)))
+        (if ⌊(value-of (clause-test c1) ρ)⌋
+            (value-of (clause-consequent c1) ρ)
+            (value-of (cond-exp (cdr cs)) ρ))))
+
+(define (clause-test c) (car c))
+(define (clause-consequent c) (cdr c))
+
+I think this makes sense.  Is it slightly odd that a new cond-exp
+is constructed in the recursive case?
+
+This has the behavior of evaluating the consequent only if the test
+evaluates to a true value.  I might have written:
+
+(value-of (cond-exp cs) ρ) =
+  (if (null? cs)
+      ⊥   ; error
+      (let* ((c1 (car cs))
+             (test-val (value-of (clause-test c1) ρ))
+             (seq-val (value-of (clause-consequent c1) ρ)))
+        (if ⌊test-val⌋
+            seq-val
+            (value-of (cond-exp (cdr cs)) ρ))))
+
+Then
+
+cond zero?(1) ==> undefined-var
+     zero?(0) ==> 4
+end
+
+causes an error.  This isn’t great, so the following uses the
+first version.
+
+Rather than pasting all of the above into value-of verbatim, I
+define a new evaluation procedure which is mutually recursive with
+value-of:
+
+(define (value-of-clauses cs env)
+  (if (null? cs)
+      (error 'value-of "cond: out of clauses")
+      (let ((c1 (car cs)))
+        (if (expval->bool (value-of (clause-test c1) env))
+            (value-of (clause-consequent c1) env)
+            (value-of-clauses (cdr cs) env)))))
+
+Then value-of is extended with a one-line clause:
+
+(cond ; ...
+      ((cond-exp? exp) (value-of-clauses (cond-exp-clauses exp) env))
+      ; ...
+      )
