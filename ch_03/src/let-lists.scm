@@ -265,14 +265,14 @@
     ((- ,s ,t) (diff-exp (parse s) (parse t)))
     ((zero? ,s) (zero?-exp (parse s)))
     ((if ,t ,c ,a) (if-exp (parse t) (parse c) (parse a)))
+    (emptylist (empty-list-exp))
     (,v (guard (symbol? v)) (var-exp v))
     ((let ,v = ,s in ,b) (let-exp v (parse s) (parse b)))
-    (emptylist (empty-list-exp))
     ((cons ,e ,e-lis) (cons-exp (parse e) (parse e-lis)))
     ((car ,e-lis) (car-exp (parse e-lis)))
     ((cdr ,e-lis) (cdr-exp (parse e-lis)))
     ((null? ,e-lis) (null?-exp (parse e-lis)))
-    ((list . ,es) (map parse es))
+    ((list . ,es) (make-list-exp (map parse es)))
     (? (error 'parse "invalid syntax" sexp))))
 
 ;; parse-program : List → Program
