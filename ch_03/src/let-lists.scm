@@ -294,6 +294,13 @@
         ((let-exp? exp)
          `(let ,(let-exp-var exp) = ,(unparse (let-exp-exp1 exp))
            in ,(unparse (let-exp-body exp))))
+        ((empty-list-exp? exp) 'emptylist)
+        ((cons-exp? exp) `(cons ,(unparse (cons-exp-obj-exp exp))
+                                ,(unparse (cons-exp-list-exp exp))))
+        ((car-exp? exp) `(car ,(unparse (car-exp-exp1 exp))))
+        ((cdr-exp? exp) `(cdr ,(unparse (cdr-exp-exp1 exp))))
+        ((null?-exp? exp) `(null? ,(unparse (null?-exp-exp1 exp))))
+        ((list-exp? exp) `(list ,@(map unparse (list-exp-exps exp))))
         (else (error 'unparse "unknown expression type" exp))))
 
 ;; unparse-program : Program → List
