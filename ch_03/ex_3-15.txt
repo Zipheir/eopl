@@ -1,0 +1,31 @@
+# Exercise 3.15
+
+This exercise adds a print “expression”.  (In quotes, because such
+a thing can’t be described with our current semantic tools.)  There’s
+no way to express the effect of printing something, so trying to
+specify the value of a print-exp would give something like a const-exp
+with an unspecified side-effect.
+
+So the (phony) semantics are:
+
+(value-of (print-exp exp1) ρ) = ⌈1⌉
+
+(Technically, this should also state that exp1 is evaluated.  But
+LET doesn’t normally include side effects.  In this exercise, it does,
+but they’re ignored.)
+
+The clause of value-of doesn’t conform to these semantics, but that’s
+how it goes with incomplete semantics:
+
+(define (value-of exp env)
+  (cond ; ...
+        ((print-exp? exp)
+         (let ((val (value-of (print-exp-exp1 exp) env)))
+           (display val)
+           (newline)
+           (num-val 1)))
+        ; ...
+        ))
+
+I’m printing the expressed value, since it’s not stated what kind of
+value the expression-to-be-printed is supposed to have.
