@@ -1,0 +1,76 @@
+# Exercise 3.14
+
+Now the grammar for LET supports boolean expressions.
+
+Expression ::= if Bool-exp then Expression else Expression
+               [if-exp (exp1 exp2 exp3)]
+
+zero?  expressions are now Bool-exps, as are the comparisons from Ex.
+3.8, so they all get moved to the following new grammar.  I’m also
+adding constants, true and false, which I assume the parser translates
+to const-bool-exps.
+
+Bool-exp ::= true
+             [const-bool-exp (bool)]
+
+         ::= false
+             [const-bool-exp (bool)]
+
+         ::= zero? Expression
+             [zero?-exp (exp1)]
+
+         ::= equal?(Expression, Expression)
+             [equal?-exp (exp1 exp2)]
+
+         ::= less?(Expression, Expression)
+             [equal?-exp (exp1 exp2)]
+
+         ::= greater?(Expression, Expression)
+             [greater?-exp (exp1 exp2)]
+
+Then value-of is altered:
+
+(define (value-of exp env)
+  (cond ; ...
+        ((const-bool-exp? exp) (value-of-bool-exp exp env))
+        ((comparison-exp? exp) (value-of-bool-exp exp env))
+        ((if-exp? exp)
+         (let ((test-val (value-of-bool-exp (if-exp-exp1 exp) env)))
+           (if (expval->bool test-val)
+               (value-of (if-exp-exp2 exp) env)
+               (value-of (if-exp-exp3 exp) env))))
+        ; ...
+        ))
+
+(define (comparison-exp? exp)
+  (or (equal?-exp? exp)
+      (less?-exp? exp)
+      (greater?-exp? exp)))
+
+Here’s value-of-bool-exp.  compare-numvals is identical in
+implementation to the version from Ex. 3.8.
+
+;; compare-numvals :
+;;   (Exp-val × Exp-val → Bool) × Exp-val × Exp-val → Exp-val
+(define (compare-numvals comp val1 val2)
+  (bool-val (comp (expval->num val1) (expval->num val2))))
+
+;; value-of-bool-exp : Bool-exp × Env → Exp-val
+(define (value-of-bool-exp exp env)
+  (cond ((const-bool-exp? exp) (const-bool-exp-bool exp))
+        ((zero?-exp exp)
+         (let ((val (value-of exp env)))
+           (if (zero? (expval->num val))
+               (bool-val #t)
+               (bool-val #f))))
+        ((equal?-exp exp)
+         (compare-numvals (value-of (equal?-exp-exp1 exp) env)
+                          (value-of (equal?-exp-exp2 exp) env)))
+        ; other comparisons ...
+        (else (error 'value-of-bool-exp
+                     "invalid boolean expression"
+                     exp))))
+
+The obvious missing piece with all of this is boolean-valued
+variables.  But this is difficult in the language as it stands,
+since the evaluation of a var-exp would become ambiguous.
