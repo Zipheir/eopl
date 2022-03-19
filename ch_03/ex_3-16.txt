@@ -4,9 +4,9 @@ This exercise extends the let construct to multiple bindings.  Here’s
 the new grammar, as well as a possible expression type.
 
 Expression ::= let {Identifier = Expression}* in Expression
-               [let-exp (binds body)]
+               [let-exp (bindings body)]
 
-Here, the ‘binds’ element of a let-exp is an alist associating
+Here, the ‘bindings’ element of a let-exp is an alist associating
 Identifiers with Expressions.  I assume that the parser helpfully
 collects this list when parsing a let expression, e.g.
 
