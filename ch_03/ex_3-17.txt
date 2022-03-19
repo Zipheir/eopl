@@ -1,0 +1,44 @@
+# Exercise 3.17
+
+This exercise adds let*, i.e. a let which sequentially evaluates its
+bindings in a progressively-extended environment.
+
+The grammar and abstract representation are the same as for let (ex.
+3.16), with the obvious name changes.
+
+(let*-exp (bindings body))
+
+The semantics require a little more thought.  I think a recursive
+approach is best:
+
+-----------------------------------
+ (value-of (let*-exp () body) env)
+   = (value-of body env)
+
+                  (value-of exp₁ ρ) = val₁
+--------------------------------------------------------------
+ (value-of (let*-exp ((var₁, exp₁) . rest) body) ρ)
+   = (value-of (let*-exp rest body) (extend-env var₁ val₁ ρ))
+
+These semantics are expressed by the aux. function value-of-let*:
+
+;; value-of-let* : List-of(Var × Exp) × Exp × Env → Exp-val
+(define (value-of-let* bs body base-env)
+  (let ((env (fold-left (lambda (e p)
+                          (extend-env (car p)
+                                      (value-of (cdr p) e)
+                                      e))
+                        base-env
+                        bs)))
+    (value-of body env)))
+
+Then I extend value-of as follows:
+
+(define (value-of exp env)
+  (cond ; ...
+        ((let*-exp? exp)
+         (value-of-let* (let*-exp-bindings exp)
+                        (let*-exp-body exp)
+                        env))
+        ; ...
+        ))
