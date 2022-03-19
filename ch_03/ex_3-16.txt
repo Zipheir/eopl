@@ -1,0 +1,77 @@
+# Exercise 3.16
+
+This exercise extends the let construct to multiple bindings.  Here’s
+the new grammar, as well as a possible expression type.
+
+Expression ::= let {Identifier = Expression}* in Expression
+               [let-exp (binds body)]
+
+Here, the ‘binds’ element of a let-exp is an alist associating
+Identifiers with Expressions.  I assume that the parser helpfully
+collects this list when parsing a let expression, e.g.
+
+(parse "let x = 7 y = 5 in x") ⇒
+  (let-exp `((x . ,(const-exp 7))
+             (y . ,(const-exp 5))
+           (var-exp 'x))
+
+Here are some semantics:
+
+               (value-of exp₁ ρ) = val₁
+                          ⋮
+               (value-of expₙ ρ) = valₙ
+---------------------------------------------------------
+(value-of (let-exp ((var₁, exp₁) … (varₙ, expₙ)) body) ρ)
+  = (value-of body ([varₙ=valₙ] ⋯ [var₁=val₁])ρ)
+
+The order in which bindings extend the environment ρ is the main
+question.  (The evaluation order would also be a question of LET
+allowed side-effects.) The Schemely way to write this would be to
+explicitly unspecify (via some ‘permute’ function) the order of
+bindings in the extended environment.  Since the text hasn’t used
+anything that fancy, yet, I’ve written this in one of the easy ways,
+namely, the bindings are “added in order”.  This implies that later
+bindings can shadow earlier ones:
+
+let x = 8
+    y = 7
+    x = 10
+in -(x, y)
+  ⇒ 3
+
+This seems better to me than the alternative, in which the above
+evaluates to 1.
+
+To implement this extension to LET, I add aux. functions for
+extending an environment from an alist and for evaluating all of
+the RHS expressions of the binding list:
+
+;; extend-env-from-alist : List-of(Var × ExpVal) × Env → Env
+(define (extend-env-from-alist as env)
+  (fold-left (lambda (e p)
+               (extend-env (car p) (cdr p) e))
+             env
+             as))
+
+;; eval-bindings : List-of(Var × Expression) × Env →
+;;   List-of(Var × ExpVal)
+(define (eval-bindings binds env)
+  (fold-right (lambda (p bs)
+                (cons (cons (car p) (value-of (cdr p) env)) bs))
+              '()
+              binds))
+
+The left fold in extend-env-from-alist gives the extension order
+described in the semantics.  The evaluation order is irrelevant
+in the current language, but, since I have to pick something, the
+bind expressions are evaluated from left to right.
+
+Then the let-exp clause of value-of is replaced as follows:
+
+(define (value-of exp env)
+  (cond ; ...
+        ((let-exp? exp)
+         (let ((binds (eval-bindings (let-exp-bindings exp) env)))
+           (value-of (let-exp-body) (extend-env-from-alist binds))))
+        ; ...
+        ))
