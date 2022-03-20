@@ -1,0 +1,51 @@
+# Exercise 3.18
+
+This exercise adds a list destructuring form, unpack:
+
+Expression ::= unpack {Identifier}* = Expression in Expression
+               [unpack-exp (vars exp1 body)]
+
+*exp1* is expected to evaluate to a list expression (from ex. 3.9)
+expressing a list with the same number of elements as there are
+names in *vars*.  This requirement is implicit in the following
+semantics:
+
+         (value-of exp₁ ρ) = ⌈(val₁ … valₙ)⌉
+---------------------------------------------------------
+ (value-of (unpack-exp (var₁ … varₙ) exp₁ body) ρ) =
+   (value-of body
+             (extend-env-from-lists (var₁ … varₙ)
+                                    (val₁ … varₙ)
+                                    ρ))
+
+where extend-env-from-lists is an aux. procedure that extends an
+environment with “parallel” lists of variables and values:
+
+;; extend-env-from-lists : List-of(Var) × List-of(Exp-val) × Env → Env
+(define (extend-env-from-lists vars vals env)
+  (fold-right (lambda (e var val) (extend-env var val e))
+              env
+              vars
+              vals))
+
+As in the multi-binding let of ex. 3.16, the semantics of unpack
+leave evaluation order unspecified.
+
+Here’s the relevant part of the extended interpreter:
+
+(define (value-of exp env)
+  (cond ; ...
+        ((unpack-exp? exp)
+         (let ((lisv (value-of (unpack-exp-exp1 exp) env)))
+           (if (list-val? lisv)
+               (let ((vals (list-val-list lisv))
+                     (vars (unpack-exp-vars exp)))
+                 (if (= (length vals) (length vars))
+                     (value-of (unpack-exp-body exp)
+                               (extend-env-from-lists vars vals env))
+                     (error 'value-of
+                            "unpack: too many/few bindings"
+                            exp)))
+               (error 'value-of "unpack: non-list value" lisv))))
+        ; ...
+        ))

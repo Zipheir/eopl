@@ -1,4 +1,5 @@
-;;;; LET extended with list operations (ex. 3.9)
+;;;; LET extended with list operations (ex. 3.9) and with
+;;;; unpack (ex. 3.18)
 
 (import (rnrs records syntactic (6)))
 
@@ -46,6 +47,9 @@
 (define-record-type list-exp
   (fields exps))
 
+(define-record-type unpack-exp
+  (fields vars exp1 body))
+
 (define (expression? obj)
   (or (const-exp? obj)
       (diff-exp? obj)
@@ -58,7 +62,8 @@
       (car-exp? obj)
       (cdr-exp? obj)
       (null?-exp? obj)
-      (list-exp? obj)))
+      (list-exp? obj)
+      (unpack-exp? obj)))
 
 ;;; Checking constructors.
 
@@ -111,7 +116,7 @@
   (assert (boolean? bool))
   (make-bool-val bool))
 
-(define-record-type (list-val list-val list-val?)
+(define-record-type list-val
   (fields list))
 
 (define (expval? obj)
@@ -142,7 +147,7 @@
 
 ;;; The expressed empty list is a constant.
 
-(define null-val (list-val '()))
+(define null-val (make-list-val '()))
 
 ;;; A-list environments from earlier exercise
 
@@ -179,6 +184,13 @@
 (define (alist->env as)
   (assert (pair-or-null? as))
   as)
+
+;; extend-env-from-lists : List-of(Var) × List-of(Exp-val) × Env → Env
+(define (extend-env-from-lists vars vals env)
+  (fold-right (lambda (var val e) (extend-env var val e))
+              env
+              vars
+              vals))
 
 ;;; Initial environment
 
@@ -233,7 +245,7 @@
         ((cons-exp? exp)
          (let ((ov (value-of (cons-exp-obj-exp exp) env))
                (lv (value-of (cons-exp-list-exp exp) env)))
-           (list-val (cons ov (expval->list lv)))))
+           (make-list-val (cons ov (expval->list lv)))))
         ;; Note: The car value is not converted!
         ((car-exp? exp)
          (let* ((val (value-of (car-exp-exp1 exp) env))
@@ -246,14 +258,26 @@
                 (xs (expval->list val)))
            (if (null? xs)
                (error 'value-of "car: empty list" xs)
-               (list-val (cdr xs)))))
+               (make-list-val (cdr xs)))))
         ((null?-exp? exp)
          (let ((xs (expval->list (value-of (null-exp-exp1 exp) env))))
            (if (null? xs) (bool-val #t) (bool-val #f))))
         ((list-exp? exp)
          (let ((vals (map (lambda (e) (value-of e env))
                           (list-exp-exps exp))))
-           (list-val vals)))
+           (make-list-val vals)))
+        ((unpack-exp? exp)
+         (let ((lisv (value-of (unpack-exp-exp1 exp) env)))
+           (if (list-val? lisv)
+               (let ((vals (list-val-list lisv))
+                     (vars (unpack-exp-vars exp)))
+                 (if (= (length vals) (length vars))
+                     (value-of (unpack-exp-body exp)
+                               (extend-env-from-lists vars vals env))
+                     (error 'value-of
+                            "unpack: too many/few bindings"
+                            exp)))
+               (error 'value-of "unpack: non-list value" lisv))))
         (else (error 'value-of "invalid expression" exp))))
 
 ;; Parser for a simple S-exp representation.  The f(x, y) notation
@@ -273,6 +297,8 @@
     ((cdr ,e-lis) (cdr-exp (parse e-lis)))
     ((null? ,e-lis) (null?-exp (parse e-lis)))
     ((list . ,es) (make-list-exp (map parse es)))
+    ((unpack ,vs = ,exp in ,body) (guard (for-all symbol? vs))
+     (make-unpack-exp vs (parse exp) (parse body)))
     (? (error 'parse "invalid syntax" sexp))))
 
 ;; parse-program : List → Program
@@ -301,6 +327,11 @@
         ((cdr-exp? exp) `(cdr ,(unparse (cdr-exp-exp1 exp))))
         ((null?-exp? exp) `(null? ,(unparse (null?-exp-exp1 exp))))
         ((list-exp? exp) `(list ,@(map unparse (list-exp-exps exp))))
+        ((unpack-exp? exp) `(unpack ,(unpack-exp-vars exp)
+                                    =
+                                    ,(unparse (unpack-exp-exp1 exp))
+                                    in
+                                    (unparse (unpack-exp-body exp))))
         (else (error 'unparse "unknown expression type" exp))))
 
 ;; unparse-program : Program → List
