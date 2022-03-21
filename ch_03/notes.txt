@@ -157,3 +157,75 @@ The equational specification:
 
 (value-of (let-exp var exp₁ body) ρ)
   = (value-of body [var = (value-of exp₁ ρ)]ρ)
+
+## 3.3 PROC: A language with procedures
+
+In PROC, procedures are expressed and denoted values:
+
+Exp-val = Int + Bool + Proc
+Den-val = Int + Bool + Proc
+
+Syntax for creating and applying procedures:
+
+Expression ::= proc (Identifier) Expression
+               [proc-exp (var body)]
+           ::= (Expression Expression)
+               [call-exp (rator rand)]
+
+What information must the Proc type include?  This is a language
+with lexical scope, so constructing a procedure means saving its
+environment.  The spec. for a proc expression:
+
+(value-of (proc-exp var body) ρ) = (proc-val (procedure var body ρ))
+
+proc-val will be the constructor for expressed procedure values.
+
+Partial semantics for procedure calls:
+
+(value-of (call-exp rator rand) ρ) =
+  (let ((proc (expval->proc (value-of rator ρ)))
+        (arg (value-of rand ρ)))
+    (apply-procedure proc arg))
+
+Applying a procedure must evaluate the procedure body in an
+extended environment, in which the formal parameter is bound to
+the argument of the call.  All other names in the procedure body
+must have the same bindings that they did at the time when the
+procedure was created.  This is expressed by the condition:
+
+(apply-procedure (procedure var body ρ) val)
+  = (value-of body [var=val]ρ)
+
+(Based on the example calculation on p. 77, it seems that PROC
+extends LET, i.e. the semantics for most things are the same as
+in that language.)
+
+### 3.3.2 Representation
+
+The first approach in this section “proceduralizes
+procedures” (see §2.2.3).  This is very straightforward:
+procedures in PROC are represented by Scheme procedures.
+Here’s the ‘procedure’ constructor; everything else is obvious
+from it:
+
+;; procedure : Var × Exp × Env → Proc
+(define (procedure var body env)
+  (lambda (val)
+    (value-of body (extend-env var val env))))
+
+A more explicit representation using a new type:
+
+(define-datatype proc proc?
+  (procedure
+    (var identifier?)
+    (body expression?)
+    (saved-env environment?)))
+
+;; apply-procedure : Proc × Exp-val → Exp-val
+(define (apply-procedure proc1 val)
+  (cases proc proc1
+    (procedure (var body saved-env)
+      (value-of body (extend-env var val saved-env)))))
+
+This kind of structure would traditionally be called a *closure*.
+[Not my favorite terminology.]
