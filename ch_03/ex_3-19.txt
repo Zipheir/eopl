@@ -1,0 +1,18 @@
+# Exercise 3.19
+
+This exercise eliminates the ‘proc ...’ form, and hence anonymous
+procedures, but it does not change the first-class status of
+procedures.  Here’s the new way to define procedure values (using
+one possible syntax).  The syntax of application doesn’t change:
+
+Expression ::= letproc Identifier (Identifier) = Expression in Expression
+               [letproc-exp (name var proc-body let-body)]
+
+e.g. letproc f (a) = -(a, 2) in (f 10) is a valid use of the new
+forms.
+
+The semantics:
+
+(value-of (letproc-exp name var proc-body let-body) ρ) =
+  (let ((pv (make-proc-val (procedure var proc-body))))
+    (value-of let-body [name=pv]ρ))
