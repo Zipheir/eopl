@@ -1,0 +1,42 @@
+# Exercise 3.21
+
+Extending PROC with multi-parameter (and, implicitly, zero-parameter)
+procedures and applications.
+
+Here’s the revised syntax, as provided by the book:
+
+Expression ::= proc ({Identifier}*(,)) Expression
+               [proc-exp (vars body)]
+
+           ::= (Expression {Expression}*)
+               [call-exp (rator rands)]
+
+The new accessors are
+
+proc-exp-vars : Proc-exp → List-of(Var)
+
+call-exp-rands : Call-exp → List-of(Exp)
+
+The type of the procedure constructor changes to:
+
+procedure : List-of(Var) × Exp × Env → Proc
+
+The parser is expected to collect the formal parameters of a
+procedure expression as a list, and similarly for the arguments
+of a call expression.
+
+The semantics:
+
+(value-of (proc-exp vars body) ρ) = (proc-val (procedure vars body ρ))
+
+(value-of (call-exp rator rands) ρ) =
+  (let ((proc (expval->proc (value-of rator ρ)))
+        (args (map (lambda (a) (value-of a ρ)) rands)))
+    (apply-procedure proc args))
+
+The apply-procedure aux. function is specified by:
+
+(apply-procedure (procedure (var₁ … varₙ) body ρ) (val₁ … valₙ))
+  = (value-of body [var₁=val₁]…[varₙ=valₙ]ρ)
+
+See src/proc-multiarg.scm for an implementation.
