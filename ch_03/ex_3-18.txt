@@ -23,7 +23,7 @@ environment with “parallel” lists of variables and values:
 
 ;; extend-env-from-lists : List-of(Var) × List-of(Exp-val) × Env → Env
 (define (extend-env-from-lists vars vals env)
-  (fold-right (lambda (e var val) (extend-env var val e))
+  (fold-right (lambda (var val e) (extend-env var val e))
               env
               vars
               vals))
