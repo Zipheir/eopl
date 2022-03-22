@@ -1,0 +1,22 @@
+# Exercise 3.24
+
+Since PROC doesn’t have boolean constants, the outer lets
+provide them.
+
+let true = zero?(0)
+in let false = zero?(1)
+   in let makeodd = proc (odd)
+                     proc (makeeven)
+                       proc (n)
+                         if zero?(n)
+                            then false
+                            else (((even even) odd) -(n, 1))
+      in let makeeven = proc (even)
+                         proc (makeodd)
+                           proc (n)
+                             if zero?(n)
+                             then true
+                             else (((makeodd makeodd) even) -(n, 1))
+         in (((makeeven makeeven) makeodd) 5)
+
+⇒ ⌈#f⌉

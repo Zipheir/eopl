@@ -1,0 +1,88 @@
+# Exercise 3.26
+
+This exercise streamlines the saved environment of the procedure
+type by storing only the bindings for the free variables.  First,
+I have to give a definition of the set of free variables of an
+expression.
+
+fv : Exp → Set-of(Var)
+
+fv (const-exp _)           = ∅
+fv (var-exp var)           = {var}
+fv (diff-exp exp1 exp2)    = fv exp1 ∪ fv exp2
+fv (zero?-exp exp1)        = fv exp1
+fv (if-exp exp1 exp2 exp3) = fv exp1 ∪ fv exp2 ∪ fv exp3
+fv (let-exp var exp1 body) = fv exp1 ∪ (fv body \ {var})
+fv (proc-exp var body)     = fv body \ {var}
+fv (call-exp rator rand)   = fv rator ∪ fv rand
+
+Note that, while environments are sequences in our lexically-scoped
+world, the free variables of an expression do form a set.  This is
+OK, since I’m just going to use this set to filter out an enviroment
+to save; provided that filter preserves the order of bindings,
+scope will be preserved.
+
+This can be translated pretty directly into Scheme, given some
+implementation of sets:
+
+;; free-variables : Exp → Set-of(Var)
+;; Usage: Computes the set of free variables of exp.
+(define (free-variables exp)
+  (cond ((const-exp? exp) (set))
+        ((var-exp? exp) (set (var-exp-var exp)))
+        ((diff-exp? exp)
+         (set-union (free-variables (diff-exp-exp1 exp))
+                    (free-variables (diff-exp-exp2 exp))))
+        ((zero?-exp? exp) (free-variables (zero?-exp-exp1 exp)))
+        ((if-exp? exp)
+         (set-union (free-variables (if-exp-exp1 exp))
+                    (free-variables (if-exp-exp2 exp))
+                    (free-variables (if-exp-exp3 exp))))
+        ((let-exp? exp)
+         (set-union (free-variables (let-exp-exp1 exp))
+                    (set-difference (free-variables (let-exp-body exp))
+                                    (set (let-exp-var exp)))))
+        ((proc-exp? exp)
+         (set-difference (free-variables (proc-exp-body exp))
+                         (set (proc-exp-var exp))))
+        ((call-exp? exp)
+         (set-union (free-variables (call-exp-rator exp))
+                    (free-variables (call-exp-rand exp))))
+        (else (error 'free-variables "unknown expression type" exp))))
+
+Building the environment:
+
+;; make-procedure-env : 
+;; Usage: Constructs an environment containing the bindings of env
+;; for only the free variables of exp.
+(define (make-procedure-env exp env)
+  (let ((free-vars (free-variables exp)))
+    (filter (lambda (p) (set-contains? (car p) free-vars))
+            env)))
+
+There’s still some inefficiency here, since make-procedure-env
+preserves all of the bindings for each free variable, not just the
+first (i.e.  the only one that can affect the value of exp).  It’s
+easy to fix this by running the resulting environment through:
+
+;; uniq : Env → Env
+;; Usage: Removes all shadowed bindings from env.
+(define (uniq env)
+  (reverse
+   (fold-left (lambda (e p)
+                (if (assv (car p) e) e (cons p e)))
+              '()
+              env)))
+
+This could be fused with the filter above.  In any case, here’s the
+revised value-of:
+
+(define (value-of exp env)
+  (cond ; ...
+        ((proc-exp? exp)
+         (make-proc-val
+          (procedure (proc-exp-var exp)
+                     (proc-exp-body exp)
+                     (make-procedure-env exp env))))
+        ; ...
+        ))

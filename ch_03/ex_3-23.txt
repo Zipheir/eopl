@@ -1,0 +1,26 @@
+# Exercise 3.23
+
+let plus =
+  proc (x)
+    proc (y)
+      -(x, -(0, y))
+in let maketimes =
+     proc (tm)
+       proc (x)
+         proc (y)
+           if zero?(x)
+           then 0
+           else (plus (((tm tm) -(x, 1)) y) y)
+   in let times = proc (x)
+                    proc (y)
+                      (((maketimes maketimes) x) y)
+      in let makefact =
+           proc (maker)
+             proc (x)
+               if zero?(x)
+               then 1
+               else (times x ((maker maker) -(x, 1)))
+         in let factorial = proc (n) ((makefact makefact) n)
+            in factorial 5
+
+⇒ ⌈120⌉
