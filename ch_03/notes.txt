@@ -229,3 +229,77 @@ A more explicit representation using a new type:
 
 This kind of structure would traditionally be called a *closure*.
 [Not my favorite terminology.]
+
+## 3.4 LETREC
+
+This language allows recursive definitions, e.g.
+
+letrec double(x) = if zero?(x)
+                      then 0
+                      else -((double -(x, 1)), -2)
+in (double 6)
+
+Note that the syntax of the letrec form is specialized to
+allow only unary procedure bindings.  The syntax:
+
+Expression ::=  letrec Identifier (Identifier) =
+                  Expression in Expression
+                [letrec-exp (p-name b-var p-body letrec-body)]
+
+The specification of letrec's desired behavior:
+
+(value-of (letrec-exp proc-name bound-var proc-body letrec-body) ρ)
+  = (value-of letrec-body
+              (extend-env-rec proc-name bound-var proc-body ρ))
+
+This of course just kicks the can to extend-env-rec.  Instead of
+specifying this directly, the environment it produces is described
+through apply-env.  If
+
+ρ₁ := (extend-env-rec proc-name bound-var proc-body ρ),
+
+then
+
+(apply-env ρ₁ proc-name) =
+  (proc-val (procedure bound-var proc-body ρ₁))
+
+and, for var ≠ proc-name,
+
+(apply-env ρ₁ var) = (apply-env ρ var)
+
+In other words, the environment ρ₁ returned by
+(extend-env-rec proc-name … ρ) binds proc-name to a procedure value
+whose saved environment is itself ρ₁.  (This is the magic part.)
+Otherwise, it contains the same bindings as ρ.
+
+A new type of environments is defined (p. 86):
+
+(define-datatype environment environment?
+  (empty-env)
+  (extend-env
+    (var identifier?)
+    (val expval?)
+    (env environment?))
+  (extend-env-rec
+    (p-name identifier?)
+    (b-var identifier?)
+    (body expression?)
+    (env environment?)))
+
+(define (apply-env env search-var)
+  (cases environment env
+    (empty-env ()
+      (report-no-binding-found search-var))
+    (extend-env (saved-var saved-val saved-env)
+      (if (eqv? saved-var search-var)
+          saved-val
+          (apply-env saved-env search-var)))
+    (extend-env-rec (p-name b-var p-body saved-env)
+      (if (eqv? search-var p-name)
+          (proc-val (procedure b-var p-body env))
+          (apply-env saved-env search-var)))))
+
+This is really clever.  By constructing the procedure value "on
+demand", this implementation avoids the circularity of reference
+that seemed to be inherent in the spec. of extend-env-rec.  (And
+there's no "lets-and-sets!" hack, either.)
