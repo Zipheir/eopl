@@ -74,7 +74,7 @@
 (define (expval->proc val)
   (if (proc-val? val)
       (proc-val-proc val)
-      (report-expval-extractor-error 'proc-val)))
+      (report-expval-extractor-error 'proc val)))
 
 (define (report-expval-extractor-error variant value)
   (error 'expval-extractors
