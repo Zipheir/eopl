@@ -1,0 +1,55 @@
+# Exercise 3.28
+
+Dynamic binding for PROC.
+
+The syntax for procedure and call expressions doesn't change.  The
+procedure constructor and eliminator have different signatures:
+
+procedure : Var × Exp → Proc
+
+apply-procedure : Proc × Exp-val × Env → Exp-val
+
+In effect, the environment argument moves from ‘procedure’ to
+‘apply-procedure’.
+
+The new semantics:
+
+(value-of (proc-exp var body) ρ) = (proc-val (procedure var body))
+
+(value-of (call-exp rator rand) ρ) =
+  (let ((proc (expval->proc (value-of rator ρ)))
+        (arg  (value-of rand ρ)))
+    (apply-procedure proc arg ρ))
+
+Now to create some representations.
+
+## Procedural representation
+
+The proc? predicate is the same as the one given on p. 79.
+
+;; procedure : Var × Exp → Proc
+(define (procedure var body)
+  (lambda (val env)
+    (value-of body (extend-env var val env))))
+
+;; apply-procedure : Proc × Exp-val × Env → Exp-val
+(define (apply-procedure proc1 val env)
+  (proc1 val env))
+
+## "Data structure" representation
+
+I'm using R6RS records here.
+
+(define-record-type proc
+  (fields var body))
+
+;; procedure : Var × Exp → Proc
+(define procedure make-proc)
+
+;; apply-procedure : Proc × Exp-val × Env → Exp-val
+(define (apply-procedure proc1 val env)
+  (value-of (proc-body proc1)
+            (extend-env (proc-var proc1) val env)))
+
+See src/proc-dynamic.scm for the interpreter for this
+language variant.
