@@ -159,10 +159,9 @@
 
 ;;; Main interpreter
 
-;; Uncomment when a scanner/parser becomes available.
-;; run : String → Exp-val
-;; (define (run s)
-;;   (value-of-program (scan&parse s)))
+;; run : List → Exp-val
+(define (run sexp)
+  (value-of-program (parse-program sexp)))
 
 ;; value-of-program : Program → Exp-val
 (define (value-of-program pgm)
