@@ -1,13 +1,10 @@
 ;;;; The basic LETREC language from chapter 3, sec. 3.4.
 
-;; Missing on Guile.  So much for R6RS compliance.
-(cond-expand
-  (guile
-   (begin
-    (define-syntax assert
-      (syntax-rules ()
-        ((assert exp)
-         (or exp (error "assertion failed" 'exp))))))))
+;; Uncomment on Guile.  So much for R6RS compliance.
+; (define-syntax assert
+;   (syntax-rules ()
+;     ((assert exp)
+;      (or exp (error "assertion failed" 'exp)))))
 
 (import (rnrs records syntactic (6))
         (rnrs lists (6)))
