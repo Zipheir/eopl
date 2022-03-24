@@ -43,16 +43,6 @@
 (define-record-type letrec-exp
   (fields p-name b-var p-body letrec-body))
 
-(define-syntax match-letrec
-  (syntax-rules ()
-    ((match-letrec exp (name var pb lb) body)
-       (let ((exp* exp))
-         (let ((name (letrec-exp-p-name exp*))
-               (var (letrec-exp-b-var exp*))
-               (pb (letrec-exp-p-body exp*))
-               (lb (letrec-exp-letrec-body exp*)))
-           body)))))
-
 (define (expression? obj)
   (or (const-exp? obj)
       (diff-exp? obj)
@@ -203,12 +193,11 @@
                (arg (value-of (call-exp-rand exp) env)))
            (apply-procedure proc arg)))
         ((letrec-exp? exp)
-         (match-letrec exp (proc-name bound-var proc-body letrec-body)
-           (value-of letrec-body
-                     (extend-env-rec proc-name
-                                     bound-var
-                                     proc-body
-                                     env))))
+         (value-of (letrec-exp-letrec-body exp)
+                   (extend-env-rec (letrec-exp-p-name exp)
+                                   (letrec-exp-b-var exp)
+                                   (letrec-exp-p-body exp)
+                                   env)))
         (else (error 'value-of "invalid expression" exp))))
 
 ;; apply-procedure : Proc × Exp-val → Exp-val
