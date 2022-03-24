@@ -132,9 +132,9 @@
              (apply-env (extended-env-rest-env env) search-var)))
         ((extended-env-rec? env)
          (if (eqv? search-var (extended-env-rec-p-name env))
-             (proc-val (procedure (extended-env-rec-b-var env)
-                                  (extended-env-rec-p-body env)
-                                  env))
+             (make-proc-val (procedure (extended-env-rec-b-var env)
+                                       (extended-env-rec-p-body env)
+                                       env))
              (apply-env (extended-env-rec-env env) search-var)))
         (else (error 'apply-env "invalid environment" env))))
 
