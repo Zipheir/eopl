@@ -1,0 +1,27 @@
+# Exercise 3.31
+
+This extends LETREC with nullary and greater-than-one-ary
+letrec procedures.  I'll assume that the multi-arg support from
+Ex. 3.21 has been incorporated.
+
+The syntax for letrec changes:
+
+Expression ::= letrec Identifier ({Identifier}*(,)) =
+                 Expression in Expression
+               [letrec-exp (p-name b-vars p-body letrec-body)]
+
+where b-vars : List-of(Var).
+
+Only minor changes are needed for the semantics:
+
+(value-of (letrec-exp proc-name bound-vars proc-body letrec-body) ρ)
+  = (value-of letrec-body
+              (extend-env-rec proc-name bound-vars proc-body ρ))
+
+The extend-env-rec constructor is the same as it was, except that the
+second parameter is now a list of identifiers.  The changes to
+apply-env are just cosmetic name-changes.
+
+That's basically it.  The heavy-lifting of multi-arg support was
+already done in Ex. 3.21.  See src/letrec-multiarg.scm for an
+implementation.
