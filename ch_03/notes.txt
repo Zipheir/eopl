@@ -303,3 +303,131 @@ This is really clever.  By constructing the procedure value "on
 demand", this implementation avoids the circularity of reference
 that seemed to be inherent in the spec. of extend-env-rec.  (And
 there's no "lets-and-sets!" hack, either.)
+
+The downside is that a new procedure value must be constructed each
+time the environment is applied.
+
+## 3.5 Scoping and binding
+
+Most programming languages allow variables to appear as either
+*references* or *declarations*.  e.g. all the variables of (f x y)
+in Scheme appear as references, while the x in (lambda (x) ...) is
+a declaration introducing x as a name for some value.
+
+A variable reference is *bound by* an associated declaration; it is
+*bound to* its value.
+
+Declarations usually have a limited scope.  Each language has
+*scoping rules* for deciding which declaration a variable reference
+refers to.  A declaration's *scope* is the portion of a program
+over which it is valid.
+
+The reference-declaration relation over a program can be determined
+without executing it.  It is thus a *static* property of the program.
+
+Under the familiar *lexical scoping* rules, we search *outward* from
+a variable reference until we find a declaration of the variable.
+
+Re-declaring a lexical variable "create[s] a hole in a scope" by
+shadowing its outer declaration.
+
+Each lexical scope is nested within a containing scope.
+
+"The *extent* of a binding is the time interval during which the
+binding is maintained."  In the languages explored so far, bindings
+have *semi-infinite* extent; the must be maintained, in principle,
+forever, since they may be e.g. part of the saved environment of a
+procedure.  In practical implementations, unreachable bindings are
+garbage collected.  Whether a binding is reachable can only be
+determined at runtime.  The "reachable set" or its complement can't
+be statically characterized.
+
+So-called *dynamic extent*, though, *is* a static property.
+
+This seems contradictory.  Is extent a static property in some
+languages (e.g. LET) but dynamic in others, in particular those with
+semi-infinite extent?  Or is "dynamic extent" a special, static(!)
+flavor of extent?
+
+I think the first meaning is intended.
+
+## 3.6 Eliminating variable names
+
+When following the lexical scoping rules outward from a variable
+reference, a number of contours (block boundaries) may be crossed
+before the associated declaration is found.  The number of contours
+crossed is called the *lexical* (or *static*) *depth* of the
+reference.  e.g.
+
+(lambda (x)
+  ((lambda (a)
+     (x a))     ; ref. to x has lexical depth 1
+   x))          ; ref. to x has lexical depth 0
+
+At least with single-binding lambdas, each variable reference could
+be replaced by its lexical depth, i.e. de Bruijn index:
+
+(nameless-lambda
+  ((nameless-lambda
+     (#1 #0))
+   #0))
+
+Among other things, this means that an environment can be represented
+by a sequence of values.  The the index #n simply refers to the nth
+element of the environment-sequence.
+
+## 3.7 Implementing lexical addressing
+
+This section implements the program transformation that (a) removes
+variables from declarations, and (b) replaces each variable reference
+with its lexical depth.  This involves writing a translator and an
+interpreter for the new "nameless" language.
+
+For the translator, the source and target languages must be specified.
+[The source language seems to be PROC, although the text doesn't
+explicitly state this.]  The constructs specific to the target
+language:
+
+Expression ::= %lexref Number
+               [nameless-var-exp (num)]
+
+           ::= %let Expression in Expression
+               [nameless-let-exp (exp1 body)]
+
+           ::= %lexproc Expression
+               [nameless-proc-exp (body)]
+
+These correspond to var-exps, let-exps, and proc-exps, respectively.
+
+The translator will reject any program containing one of these
+constructs.  Likewise, the interpreter for the target language will
+reject a program containing a "nameful" construct.
+
+Calculating the lexical address of a reference requires context,
+namely the scopes enclosing the reference.  Thus, 'translation-of'
+(the translator procedure) will take as arguments an expresssion
+and a *static environment*, which is a list of variables representing
+the scopes of the current expression.  To calculate the lexical
+address of a variable, we find its position (well, the position of
+its first occurrence) in this list.
+
+The semantics, with brackets abbreviating (translation-of ...):
+
+⟦(var-exp (var)) senv⟧ = (nameless-var-exp (apply-senv senv var))
+
+⟦(let-exp (var exp1 body)) senv⟧ =
+  (nameless-let-exp ⟦exp1 senv⟧ ⟦body (extend-senv var senv)⟧)
+
+⟦(proc-exp (var body)) senv⟧ =
+  (nameless-proc-exp ⟦body (extend-senv var senv)⟧)
+
+⟦(const-exp (num)) senv⟧ = (const-exp num)
+
+⟦(diff-exp (exp1 exp2)) senv⟧ = (diff-exp ⟦exp1 senv⟧ ⟦exp2 senv⟧)
+
+⟦(zero?-exp (exp1)) senv⟧ = (zero?-exp ⟦exp1 senv⟧)
+
+⟦(if-exp (exp1 exp2 exp3)) senv⟧ =
+  (if-exp ⟦exp1 senv⟧ ⟦exp2 senv⟧ ⟦exp3 senv⟧)
+
+⟦(call-exp (rator rand)) senv⟧ = (call-exp ⟦rator senv⟧ ⟦rand senv⟧)
