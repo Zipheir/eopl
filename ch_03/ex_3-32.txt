@@ -1,0 +1,55 @@
+# Exercise 3.32
+
+This exercise extends the letrec form to allow any number of bindings,
+each of which is in scope for all of the rest.  This is quite a bit
+trickier than multi-binding let, but the syntax at least is pretty
+simple:
+
+Expression ::= letrec {Identifier (Identifier) = Expression}* in
+                 Expression
+               [letrec-exp (bindings letrec-body)]
+
+Where bindings : List-of(Identifier × Identifier × Expression).
+
+Now the semantics.  The most obvious idea might be use the semantics
+as for multi-binding let, but replacing extend-env with
+extend-env-rec.  This doesn't give the right environment for the
+bindings, however.  All of the (bodies of) the bound procedures
+must be given the same saved environment.
+
+The approach that comes to mind is to change extend-env-rec to
+store all of the bindings.  The constructor now has the signature
+
+extend-env-rec : List-of(Identifier × Identifier × Expression) × Env
+                   → Env
+
+If
+
+bs := ((name₁ bvar₁ pbody₁) …)
+
+ρ₁ := (extend-env-rec bs ρ),
+
+then if nameₖ appears in (nameₖ bvarₖ pbodyₖ) ∈ bs,
+
+(apply-env ρ₁ nameₖ) = (proc-val (procedure bvarₖ pbodyₖ ρ₁))
+
+For any identifier var ∉ bs,
+
+(apply-env ρ₁ var) = (apply-env ρ var)
+
+Here's the relevant section of apply-env, reflecting the new
+specification:
+
+(define (apply-env env search-var)
+  (cases environment env
+    ;; ...
+    (extend-env-rec (bindings saved-env)
+      (cond ((assv search-var bindings) =>
+             (lambda (b)
+               (proc-val
+                (procedure (list-ref b 1) (list-ref b 2) env))))
+            (else (apply-env saved-env search-var))))))
+
+This works.  It's a little odd, though, since it makes environments
+into trees.  Is there another way that preserves the linear structure
+of environments?
