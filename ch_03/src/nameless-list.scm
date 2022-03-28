@@ -311,7 +311,7 @@
         ((car-exp? exp) `(car ,(unparse (car-exp-exp1 exp))))
         ((cdr-exp? exp) `(cdr ,(unparse (cdr-exp-exp1 exp))))
         ((null?-exp? exp) `(null? ,(unparse (null?-exp-exp1 exp))))
-        ((list-exp? exp) `(list ,@(unparse (list-exp-exps exp))))
+        ((list-exp? exp) `(list ,@(map unparse (list-exp-exps exp))))
         ((call-exp? exp)
          (list (unparse (call-exp-rator exp))
                (unparse (call-exp-rand exp))))
