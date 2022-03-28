@@ -303,7 +303,7 @@
          `(proc ,(unparse (nameless-proc-exp-body exp))))
         ((nameless-unpack-exp? exp)
          `(unpack ,(unparse (nameless-unpack-exp-exp1 exp))
-                  ,(unparse (nameless-unpack-exp-body exp))))
+           in ,(unparse (nameless-unpack-exp-body exp))))
         ((empty-list-exp? exp) 'emptylist)
         ((cons-exp? exp)
          `(cons ,(unparse (cons-exp-exp1 exp))
