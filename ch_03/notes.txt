@@ -431,3 +431,39 @@ The semantics, with brackets abbreviating (translation-of ...):
   (if-exp ⟦exp1 senv⟧ ⟦exp2 senv⟧ ⟦exp3 senv⟧)
 
 ⟦(call-exp (rator rand)) senv⟧ = (call-exp ⟦rator senv⟧ ⟦rand senv⟧)
+
+
+## 3.7.2 The Nameless interpreter
+
+The interpreter uses the lexical addresses produced by the compiler
+above to avoid "explicitly" searching for variables at runtime.
+
+There are no variables in Nameless programs, so environments are
+simple:
+
+empty-nameless-env : () → Nameless-env
+
+extend-nameless-env : Exp-val × Nameless-env → Nameless-env
+
+apply-nameless-env : Nameless-env × Lex-addr → Den-val
+
+The nameless spec. for procedures:
+
+(apply-procedure (procedure body ρ) val) =
+  (value-of body (extend-nameless-env val ρ))
+
+This is the same as it was for PROC, without the bound variable.
+
+Most of the interpreter function value-of is the same as the one
+for PROC.  Here's where the spec differs:
+
+(value-of (nameless-var-exp n) env) = (apply-nameless-env env n)
+
+(value-of (nameless-let-exp exp1 body) env) =
+  (let ((val (value-of exp1 env)))
+    (value-of body (extend-nameless-env val env)))
+
+(value-of (nameless-proc-exp body) env) =
+  (proc-val (procedure body env))
+
+See src/nameless.scm for an implementation.

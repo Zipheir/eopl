@@ -137,7 +137,7 @@
 ;; init-senv : () → Senv
 (define (init-senv) (list->senv '(i v x)))
 
-;;; Compiler
+;;;; Compiler
 
 ;; translation-of : PROC-exp × Senv → Nameless-exp
 (define (translation-of exp senv)
@@ -171,7 +171,7 @@
 ;; translation-of-program : Program → Nameless-program
 (define (translation-of-program pgm)
   (make-program
-   (translation-of (program-exp1 pgm) init-senv)))
+   (translation-of (program-exp1 pgm) (init-senv))))
 
 ;;;; (Un)parsing
 
@@ -229,3 +229,74 @@
 ;; unparse-program : Nameless-program → List
 (define (unparse-program pgm)
   (unparse (program-exp1 pgm)))
+
+;;;; Interpreter
+
+;;; Nameless environments
+
+;; nameless-environment? : Scheme-val → Bool
+(define (nameless-environment? x)
+  (and (pair-or-null? x)
+       (for-all expval? x)))
+
+;; empty-nameless-env : () → Nameless-env
+(define (empty-nameless-env) '())
+
+;; extend-nameless-env : Expval × Nameless-env → Nameless-env
+(define (extend-nameless-env val env)
+  (cons val env))
+
+;; apply-nameless-env : Nameless-env × Lexaddr → Nameless-env
+(define (apply-nameless-env env n)
+  (list-ref env n))
+
+;; init-nameless-env : () → Nameless-env
+(define (init-nameless-env) (map make-num-val '(1 5 10)))
+
+;;; (Nameless) procedures
+
+(define-record-type proc
+  (fields body saved-nameless-env))
+
+;; apply-procedure : Proc × Exp-val → Exp-val
+(define (apply-procedure proc1 val)
+  (value-of (proc-body proc1)
+            (extend-nameless-env val
+                                 (proc-saved-nameless-env proc1))))
+
+;; value-of : Nameless-exp × Nameless-env → Exp-val
+(define (value-of exp env)
+  (cond ((const-exp? exp) (make-num-val (const-exp-num exp)))
+        ((diff-exp? exp)
+         (let ((val1 (value-of (diff-exp-exp1 exp) env))
+               (val2 (value-of (diff-exp-exp2 exp) env)))
+           (let ((num1 (expval->num val1))
+                 (num2 (expval->num val2)))
+             (make-num-val (- num1 num2)))))
+        ((zero?-exp? exp)
+         (let ((val (value-of (zero?-exp-exp1 exp) env)))
+           (if (zero? (expval->num val))
+               (make-bool-val #t)
+               (make-bool-val #f))))
+        ((if-exp? exp)
+         (let ((test-val (value-of (if-exp-exp1 exp) env)))
+           (if (expval->bool test-val)
+               (value-of (if-exp-exp2 exp) env)
+               (value-of (if-exp-exp3 exp) env))))
+        ((call-exp? exp)
+         (let ((proc (expval->proc (value-of (call-exp-rator exp) env)))
+               (arg (value-of (call-exp-rand exp) env)))
+           (apply-procedure proc arg)))
+        ((nameless-var-exp? exp)
+         (apply-nameless-env env (nameless-var-exp-index exp)))
+        ((nameless-let-exp? exp)
+         (let ((val (value-of (nameless-let-exp-exp1 exp) env)))
+           (value-of (nameless-let-exp-body exp)
+                     (extend-nameless-env val env))))
+        ((nameless-proc-exp? exp)
+         (make-proc-val (make-proc (nameless-proc-exp-body exp) env)))
+        (else (error 'value-of "invalid expression type" exp))))
+
+;; value-of-program : Nameless-program → Exp-val
+(define (value-of-program pgm)
+  (value-of (program-exp1 pgm) (init-nameless-env)))
