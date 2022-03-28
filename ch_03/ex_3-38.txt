@@ -1,0 +1,29 @@
+# Exercise 3.38
+
+This exercise adds cond to the source language of the PROC -> nameless
+translator.  I'll use the same abstract representation of cond that
+I used in ex. 3.12:
+
+make-cond-exp : List-of(Clause) → Cond-exp
+
+cond-exp-clauses : Cond-exp → List-of(Clause)
+
+The Clause type is isomorphic to Exp × Exp, with eliminators
+clause-test (π₁) and clause-consequent (π₂).
+
+The translation is given by:
+
+⟦(cond-exp ((t₁ . c₁) …) senv⟧ = (cond-exp ((⟦t₁ senv⟧ . ⟦c₁ senv⟧) …))
+
+Since no binding occurs in cond expressions, this is straightforward.
+Here's the relevant part of the compiler:
+
+(define (translation-of exp senv)
+  (cond ; ...
+        ((cond-exp? exp)
+         (cond-exp (map (lambda (p)
+                          (cons (translation-of (car p) senv)
+                                (translation-of (cdr p) senv)))
+                        (cond-exp-clauses exp))))
+        ; ...
+        ))

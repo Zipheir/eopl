@@ -1,0 +1,97 @@
+# Exercise 3.39
+
+This exercise extends the source language of the PROC -> nameless
+translator with 'pack' and unpack expressions.  unpack was added in
+ex. 3.18, but pack wasn't, so it's not clear what they mean by this.
+I *think* what happened is that a pack form was mentioned in earlier
+versions, but was replaced by the 'list' form in the 3rd edition.  So
+I'll add that instead.
+
+(Everything suggests that the authors didn't pay much attention
+to this exercise.)
+
+Syntax:
+
+Expression ::= unpack {Identifier}* = Expression in Expression
+               [unpack-exp (vars exp1 body)]
+
+           ::= list({Expression}*(,))
+               [list-exp (exps)]
+
+## Lists
+
+Of course, to make any sense of these forms, the translator must
+first be able to handle lists.  (Another thing they missed when
+writing this exercise.) So let's do that.  There's a lot to add,
+but it's all straightforward.
+
+Syntax:
+
+Expression ::= emptylist
+               [empty-list-exp ()]
+
+           ::= cons(Expression, Expression)
+               [cons-exp (exp1 exp2)]
+
+           ::= car(Expression)
+               [car-exp (exp1)]
+
+           ::= cdr(Expression)
+               [cdr-exp (exp1)]
+
+           ::= null?(Expression)
+               [null?-exp (exp1)]
+
+The semantics are the same as they were in Ex. 3.9, modulo some name
+changes.  Since none of these forms do any binding, the translations
+are all easy.
+
+⟦(empty-list-exp) senv⟧       = (empty-list-exp)
+⟦(cons-exp (exp1 exp2)) senv⟧ = (cons-exp ⟦exp1 senv⟧ ⟦exp2 senv⟧)
+⟦(car-exp (exp1)) senv⟧       = (car-exp ⟦exp1 senv⟧)
+⟦(cdr-exp (exp1)) senv⟧       = (cdr-exp ⟦exp1 senv⟧)
+⟦(null?-exp (exp1)) senv⟧     = (null?-exp ⟦exp1 senv⟧)
+
+I also have to add the list-val constructor and eliminator, also from
+Ex. 3.9.
+
+## list
+
+This one is easy:
+
+⟦(list-exp (e₁ … eₖ)) senv⟧ = (list-exp (⟦e₁ senv⟧ … ⟦eₖ senv⟧))
+
+## unpack
+
+The semantics of unpack are the same as they were in Ex. 3.18.  But
+how can they be translated?  First of all, this is the first single
+form that adds multiple bindings to an environment, which, without
+further translation, doesn't fit the current lexical address model
+(one binding form, one address).  So what does a nameless-unpack-exp
+look like?
+
+Nameless-exp ::= %unpack Expression in Expression
+                 [nameless-unpack-exp (list-exp body)]
+
+To come up with a meaning-preserving translation, though, I also need
+to know its semantics.  So here's an attempt at the abstract
+interpreter clause:
+
+(value-of (nameless-unpack-exp list-exp body) ρ) =
+  (let* ((val (value-of list-exp ρ))
+         (lis (list-val-list val)))
+    (value-of body
+              (extend-nameless-env-from-list lis ρ)))
+
+There's some level-crossing here, with the list expression being
+essentially tacked onto the environment, but this seems sensible.
+
+So now I can attempt the translation.  Actually, it's pretty
+reasonable:
+
+⟦(unpack-exp (vars exp1 body)) senv⟧ =
+  (nameless-unpack-exp ⟦exp1 senv⟧
+                       ⟦body (extend-senv-from-list vars senv)⟧)
+
+The moral of the story is: Get some idea of the target form you're
+translating a form to before trying to write the translation.
