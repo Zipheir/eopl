@@ -8,6 +8,11 @@
 
 (define (pair-or-null? x) (or (pair? x) (null? x)))
 
+;; on-pair : (a → b) → ((a × a) → (b × b))
+(define (on-pair f)
+  (lambda (p)
+    (cons (f (car p)) (f (cdr p)))))
+
 (define-record-type program
   (fields exp1))
 
@@ -27,6 +32,9 @@
 
 (define-record-type call-exp
   (fields rator rand))
+
+(define-record-type cond-exp
+  (fields clauses))
 
 ;; Lists
 
@@ -70,6 +78,7 @@
       (let-exp? obj)
       (proc-exp? obj)
       (call-exp? obj)
+      (cond-exp? obj)
       (unpack-exp? obj)
       (empty-list-exp? obj)
       (cons-exp? obj)
@@ -150,6 +159,7 @@
       (nameless-proc-exp? obj)
       (nameless-unpack-exp? obj)
       (call-exp? obj)
+      (cond-exp? obj)
       (cons-exp? obj)
       (car-exp? obj)
       (cdr-exp? obj)
@@ -162,7 +172,7 @@
 ;; Lex-addr = ℕ
 
 ;; empty-senv : () → Senv
-(define (empty-env) '())
+(define (empty-senv) '())
 
 ;; extend-senv : Var × Senv → Senv
 (define (extend-senv var senv) (cons var senv))
@@ -204,7 +214,7 @@
          (make-diff-exp (translation-of (diff-exp-exp1 exp) senv)
                         (translation-of (diff-exp-exp2 exp) senv)))
         ((zero?-exp? exp)
-         (make-zero?-exp (translation-of (zero?-exp1 exp) senv)))
+         (make-zero?-exp (translation-of (zero?-exp-exp1 exp) senv)))
         ((if-exp? exp)
          (make-if-exp (translation-of (if-exp-exp1 exp) senv)
                       (translation-of (if-exp-exp2 exp) senv)
@@ -221,6 +231,10 @@
         ((call-exp? exp)
          (make-call-exp (translation-of (call-exp-rator exp) senv)
                         (translation-of (call-exp-rand exp) senv)))
+        ((cond-exp? exp)
+         (make-cond-exp (map (on-pair (lambda (e)
+                                        (translation-of e senv)))
+                             (cond-exp-clauses exp))))
         ((unpack-exp? exp)
          (make-nameless-unpack-exp
           (translation-of (unpack-exp-exp1 exp) senv)
@@ -246,7 +260,7 @@
 ;; translation-of-program : Program → Nameless-program
 (define (translation-of-program pgm)
   (make-program
-   (translation-of (program-exp1 pgm) init-senv)))
+   (translation-of (program-exp1 pgm) (init-senv))))
 
 ;;;; (Un)parsing
 
@@ -266,6 +280,7 @@
     ((let ,v = ,s in ,b) (make-let-exp v (parse s) (parse b)))
     ((proc (,v) ,body) (guard (symbol? v))
      (make-proc-exp v (parse body)))
+    ((cond . ,cs) (make-cond-exp (map (on-pair parse) cs)))
     ((unpack ,vs = ,e in ,b)
      (guard (pair-or-null? vs) (for-all symbol? vs))
      (make-unpack-exp vs (parse e) (parse b)))
@@ -291,11 +306,13 @@
         ((diff-exp? exp)
          `(- ,(unparse (diff-exp-exp1 exp))
              ,(unparse (diff-exp-exp2 exp))))
-        ((zero?-exp? exp) `(zero? ,(unparse (zero?-exp1 exp))))
+        ((zero?-exp? exp) `(zero? ,(unparse (zero?-exp-exp1 exp))))
         ((if-exp? exp)
          `(if ,(unparse (if-exp-exp1 exp))
               ,(unparse (if-exp-exp2 exp))
               ,(unparse (if-exp-exp3 exp))))
+        ((cond-exp? exp)
+         `(cond ,@(map (on-pair unparse) (cond-exp-clauses exp))))
         ((nameless-let-exp? exp)
          `(let ,(unparse (nameless-let-exp-exp1 exp))
            in ,(unparse (nameless-let-exp-body exp))))
@@ -383,6 +400,7 @@
            (if (expval->bool test-val)
                (value-of (if-exp-exp2 exp) env)
                (value-of (if-exp-exp3 exp) env))))
+        ((cond-exp? exp) (value-of-clauses (cond-exp-clauses exp) env))
         ((call-exp? exp)
          (let ((proc (expval->proc (value-of (call-exp-rator exp) env)))
                (arg (value-of (call-exp-rand exp) env)))
@@ -426,6 +444,15 @@
            (value-of (nameless-unpack-exp-body exp)
                      (extend-nameless-env-from-list lis env))))
         (else (error 'value-of "invalid expression type" exp))))
+
+;; value-of-clauses : List-of(Exp × Exp) × Nameless-env → Exp-val
+(define (value-of-clauses cs env)
+  (pmatch cs
+    (() (error 'value-of "cond: out of clauses"))
+    (((,texp . ,cexp) . ,cs*)
+     (if (expval->bool (value-of texp env))
+         (value-of cexp env)
+         (value-of-clauses cs* env)))))
 
 ;; value-of-program : Nameless-program → Exp-val
 (define (value-of-program pgm)
