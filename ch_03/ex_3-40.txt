@@ -1,0 +1,66 @@
+# Exercise 3.40
+
+This exercise extends the PROC → Nameless compiler to handle letrec
+expressions.  (So, I suppose, it becomes a LETREC → Nameless
+translator instead.)  Like the letrec of that language, only procedure
+values can be bound recursively.
+
+Trying to learn the lesson of the previous exercise, I'm going to
+extend the target language first, before extending the translator.
+letrec's semantics in Nameless are analogous to its semantics in
+LETREC, but I also need to add semantics for references to
+letrec-bound variables:
+
+(value-of (nameless-letrec-exp (p-body letrec-body)) ρ) =
+  (value-of letrec-body (extend-nameless-env p-body ρ))
+
+(value-of (nameless-rec-var-exp (n)) ρ) =
+  (apply-nameless-env-rec ρ n)
+
+;; apply-nameless-env-rec : Nameless-env × Lexaddr → Exp-val
+(define (apply-nameless-env-rec env k)
+  (proc-val (procedure (list-ref env k) env)))
+
+Note that only the application of environments changes; the same
+extension function is used for letrec bindings as for everything
+else.  The catch is that references to letrec bindings must be
+marked, i.e. they must be nameless-rec-var-exps in the tree, as
+opposed to vanilla nameless-var-exps.
+
+On the whole, this is simpler than the situation in LETREC.
+
+Now I can extend the compiler.
+
+The context argument of translation-of now carries the additional
+information of whether a name was bound by letrec or not.  So let's
+consider the new type of static environments first.  Sticking with
+the list representation, the Senv type is now a list of Sym × Bool:
+
+;; extend-senv : Var × Senv → Senv
+(define (extend-senv var senv)
+  (cons (cons var #f) senv))
+
+;; extend-senv-rec : Var × Senv ­→ Senv
+(define (extend-senv-rec var senv)
+  (cons (cons var #t) senv))
+
+;; apply-senv : Senv × Var → Lexaddr × Bool
+
+The translation:
+
+⟦(letrec-exp (p-name b-var p-body lr-body)) senv⟧ =
+  (let ((senv* (extend-senv-rec p-name senv)))
+    (nameless-letrec-exp ⟦p-body (extend-env b-var senv*)⟧
+                         ⟦lr-body senv*⟧))
+
+The translation of variable references must change as well, so that
+letrec-bound variables can be marked:
+
+⟦(var-exp (var)) senv⟧ =
+  (let* ((p (apply-senv senv var))
+         (addr (car p)))
+    (if (cdr p)  ; letrec bound variable?
+        (nameless-rec-var-exp addr)
+        (nameless-var-exp addr)))
+
+That's basically it.
