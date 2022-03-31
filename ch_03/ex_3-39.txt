@@ -79,7 +79,7 @@ interpreter clause:
 
 (value-of (nameless-unpack-exp list-exp body) ρ) =
   (let* ((val (value-of list-exp ρ))
-         (lis (list-val-list val)))
+         (lis (expval->list val)))
     (value-of body
               (extend-nameless-env-from-list lis ρ)))
 
