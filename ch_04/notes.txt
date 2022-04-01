@@ -1,0 +1,66 @@
+# State
+
+Unlike a value, an effect is global: it affects the entire computation.
+(Isn't this, in a nutshell, the central fact about effects?
+Everything that's tricky about them, if not everything that's
+interesting, seems to stem from this.)
+
+This chapter is mostly concerned with one kind of effect: assignment.
+"As we have seen, binding is local, but assignment is potentially
+global.  It is about the *sharing* of two values between otherwise
+unrelated portions of the computation." (p. 103)
+
+Memory will be modeled as a map from a finite set of locations to a
+set of *storable values*.  This map is called the *store*.
+
+Whether or not the set of storable values of a language is the same
+as its set of expressed values is a design question.  But they are
+usually the same set.
+
+A *reference* (NOT a variable reference in the sense of ch. 3!)
+represents a location.
+
+Two store-language designs are considered in this chapter: one with
+explicit references, and one with implicit.
+
+## 4.2 EXPLICIT-REFS
+
+In this language, references are a new kind of expressed value.
+
+Exp-val = Int + Bool + Proc + Ref(Exp-val)
+Den-val = Exp-val
+
+Ref(Exp-val) denotes the set of references to locations containing
+expressed values.
+
+The language is PROC extended with the following reference
+operations:
+
+* 'newref' allocates a new location and returns a reference to it.
+
+* 'deref' returns the contents of the location that a reference
+  represents.
+
+* 'setref' changes the contents of the location represented by
+  a reference.
+
+(A 'begin ... end' form analogous to Scheme 'begin' is also added.)
+
+An example:
+
+let x = newref(0)
+in letrec even(dummy) =
+            if zero?(deref(x))
+               then 1
+               else begin
+                      setref(x, -(deref(x), 1));
+                      (odd 888)
+                    end
+          odd(dummy) =
+            if zero?(deref(x))
+               then 0
+               else begin
+                      setref(x, -(deref(x), 1));
+                      (even 888)
+                    end
+in begin setref(x, 13); (odd 888) end
