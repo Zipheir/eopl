@@ -417,7 +417,7 @@
 (define (apply-nameless-env-rec env n)
   (if (zero? n)
       (make-proc-val (make-proc (car env) env))
-      (apply-nameless-env (cdr env) (- n 1))))
+      (apply-nameless-env-rec (cdr env) (- n 1))))
 
 ;; init-nameless-env : () → Nameless-env
 (define (init-nameless-env) (map make-num-val '(1 5 10)))
