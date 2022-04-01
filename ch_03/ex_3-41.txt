@@ -1,0 +1,120 @@
+# Exercise 3.41
+
+This exercise adds multiargument support to the Nameless compiler
+and interpreter.  The first thing that changes is the structure of
+the environments used by the Nameless interpreter.
+
+Nameless-env ::= Empty | Rib List-of(Exp-val) Nameless-env
+
+This is a variant of the "ribcage" model from ex. 2.11.
+Obviously, we can represent this by List-of(List-of(Exp-val)).
+Environment operations:
+
+;; empty-nameless-env : () → Nameless-env
+
+;; extend-nameless-env : List-of(Exp-val) × Nameless-env →
+;;   Nameless-env
+(define (extend-nameless-env vs env)
+  (cons vs env))
+
+Lexical addresses now have two components, the first an index of a
+rib of the environment, and the second and index into the rib:
+
+Lex-addr = Nat × Nat
+
+Here's the relevant function:
+
+;; apply-nameless-env : Nameless-env × Lex-addr → Exp-val
+(define (apply-nameless-env env p)
+  (letrec
+   ((lookup
+     (lambda (e i)
+       (cond ((null? e) (error ...))
+             ((zero? i) (list-ref (car e) (cdr p)))
+             (else (lookup (cdr e) (- i 1))))))))
+    (lookup env (car p)))
+
+Here are the new versions of the affected Nameless constructs.
+
+;; make-nameless-var-exp : Lex-addr → Nameless-exp
+(nameless-var-exp addr)
+
+;; make-nameless-let-exp : List-of(Nameless-exp) × Nameless-exp →
+;;  Nameless-exp
+(nameless-let-exp exps body)
+
+;; make-nameless-call-exp : Nameless-exp × List-of(Nameless-exp) →
+;;   Nameless-exp
+(nameless-call-exp rator rands)
+
+The semantics:
+
+(value-of (nameless-let-exp exps body) ρ) =
+  (let ((vals (map (lambda (exp) (value-of exp ρ)) exps)))
+    (value-of body (extend-nameless-env vals ρ)))
+
+(value-of (nameless-call-exp rator rands) ρ) =
+  (let ((proc (expval->proc (value-of rator ρ)))
+        (args (map (lambda (e) (value-of e ρ)) rands)))
+    (apply-procedure proc args)))
+
+The apply-procedure operation must also change, although the
+procedure representation doesn't:
+
+;; apply-procedure : Proc × List-of(Exp-val) → Exp-val
+(define (apply-procedure proc1 vals)
+  (value-of (proc-body proc1)
+            (extend-nameless-env vals
+                                 (proc-saved-nameless-env proc1))))
+
+OK, so that completes support for multi-argument let and
+procedures in Nameless.  Time to extend the PROC → Nameless
+compiler.
+
+In order to compile variable references to "2D" lexical addresses,
+the static environments of the compiler will also have to be
+two-dimensional.  The abstract type is just another ribcage, so I'll
+abbreviate things.  Only apply-senv is particularly interesting:
+
+;; Senv ≅ List-of(List-of(Sym))
+
+;; extend-senv : List-of(Vars) × Senv → Senv
+
+;; apply-senv : Senv × Var → Lex-addr
+(define (apply-senv senv var)
+  (letrec
+   ((index-of-rib
+     (lambda (senv)
+       (pmatch senv
+         (() (error 'apply-senv "unbound variable" var))
+         ((,vs . ,senv*)
+          (if (memv var vs)
+              0
+              (+ 1 (index-of-rib senv*))))))))
+    (let ((i (index-of-rib senv)))
+      (cons i (index-of var (list-ref senv i))))))
+
+;; index-of : List × * → Nat
+;; Simple recursive implementation, could be rewritten iteratively.
+(define (index-of x lis)
+  (pmatch lis
+    (() (error 'index-of "not found" x))
+    ((,y . ,ys)
+     (if (eqv? x y)
+         0
+         (+ 1 (index-of x ys))))))
+
+Now I can write the new translator.  The source language will be
+the multiarg extension of PROC from Ex. 3.21, combined with the
+analogous extension of LET (Ex. 3.16).  Here are the relevant
+translations:
+
+⟦(let-exp (vars exps body)) ρ⟧ =
+  (make-nameless-let-exp (map (λ (e) ⟦e ρ⟧) exps)
+                         ⟦body (extend-senv vars ρ)⟧)
+
+⟦(proc-exp (vars body)) ρ⟧ =
+  (make-nameless-proc-exp ⟦body (extend-senv vars ρ)⟧)
+
+⟦(call-exp (rator rands)) ρ⟧ =
+  (make-call-exp ⟦rator ρ⟧ (map (λ (e) ⟦e ρ⟧) rands))
