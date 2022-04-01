@@ -521,3 +521,12 @@
 ;; value-of-program : Nameless-program → Exp-val
 (define (value-of-program pgm)
   (value-of (program-exp1 pgm) (init-nameless-env)))
+
+;;; Main compiler/interpreter driver
+
+(define (compile-and-run sexp)
+  (let ((prog (translation-of-program (parse-program sexp))))
+    (display "Translated program: ")
+    (display (unparse-program prog))
+    (newline)
+    (value-of-program prog)))
