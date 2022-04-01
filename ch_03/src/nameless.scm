@@ -1,6 +1,12 @@
 ;;;; PROC → Nameless compiler from section 3.7, and nameless
 ;;;; interpreter, extended with lists.
 
+;; Uncomment on Guile.  So much for R6RS compliance.
+(define-syntax assert
+  (syntax-rules ()
+    ((assert exp)
+     (or exp (error "assertion failed" 'exp)))))
+
 (import (rnrs records syntactic (6))
         (rnrs lists (6)))
 
