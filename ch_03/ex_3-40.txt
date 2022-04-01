@@ -19,7 +19,9 @@ letrec-bound variables:
 
 ;; apply-nameless-env-rec : Nameless-env × Lexaddr → Exp-val
 (define (apply-nameless-env-rec env k)
-  (proc-val (procedure (list-ref env k) env)))
+  (if (zero? k)
+      (proc-val (procedure (car env) env))
+      (apply-nameless-env-rec (cdr env) (- k 1))))
 
 Note that only the application of environments changes; the same
 extension function is used for letrec bindings as for everything
@@ -45,6 +47,17 @@ the list representation, the Senv type is now a list of Sym × Bool:
   (cons (cons var #t) senv))
 
 ;; apply-senv : Senv × Var → Lexaddr × Bool
+(define (apply-senv senv var)
+  (let loop ((senv senv) (k 0))
+    (if (null? senv)
+        (error 'apply-env "unbound variable" var))
+        (if (eqv? var (caar senv))
+            (cons k (cdar senv))
+            (loop (cdr senv) (+ k 1)))))
+
+The new apply-senv is a little funky, since it has to return the
+lexical address of a variable *and* whether the variable was bound
+by letrec.
 
 The translation:
 
