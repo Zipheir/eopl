@@ -75,6 +75,9 @@
 (define-record-type unpack-exp
   (fields vars exp1 body))
 
+(define-record-type letrec-exp
+  (fields proc-name bound-var proc-body letrec-body))
+
 (define (PROC-expression? obj)
   (or (const-exp? obj)
       (diff-exp? obj)
@@ -82,6 +85,7 @@
       (if-exp? obj)
       (var-exp? obj)
       (let-exp? obj)
+      (letrec-exp? obj)
       (proc-exp? obj)
       (call-exp? obj)
       (cond-exp? obj)
@@ -146,6 +150,10 @@
 (define-record-type nameless-var-exp
   (fields index))
 
+;; letrec-bound variable.
+(define-record-type nameless-rec-var-exp
+  (fields index))
+
 (define-record-type nameless-let-exp
   (fields exp1 body))
 
@@ -155,13 +163,18 @@
 (define-record-type nameless-unpack-exp
   (fields exp1 body))
 
+(define-record-type nameless-letrec-exp
+  (fields proc-body letrec-body))
+
 (define (nameless-expression? obj)
   (or (const-exp? obj)
       (diff-exp? obj)
       (zero?-exp? obj)
       (if-exp? obj)
       (nameless-var-exp? obj)
+      (nameless-rec-var-exp? obj)
       (nameless-let-exp? obj)
+      (nameless-letrec-exp? obj)
       (nameless-proc-exp? obj)
       (nameless-unpack-exp? obj)
       (call-exp? obj)
@@ -174,27 +187,38 @@
 
 ;;; Static environments
 
-;; Senv     = List-of(Sym)
+;; Senv     = List-of(Sym × Bool)
+;;
+;; The Bool value indicates whether the corresponding symbol was bound
+;; by a letrec expression.
+;;
 ;; Lex-addr = ℕ
 
 ;; empty-senv : () → Senv
 (define (empty-senv) '())
 
 ;; extend-senv : Var × Senv → Senv
-(define (extend-senv var senv) (cons var senv))
+(define (extend-senv var senv) (cons (cons var #f) senv))
 
-;; apply-senv : Senv × Var → Lex-addr
+;; extend-senv-rec : Var × Senv → Senv
+(define (extend-senv-rec var senv) (cons (cons var #t) senv))
+
+;; apply-senv : Senv × Var → Lex-addr × Bool
 (define (apply-senv senv var)
-  (cond ((null? senv) (error 'apply-env "unbound variable" var))
-        ((eqv? var (car senv)) 0)
-        (else (+ 1 (apply-senv (cdr senv) var)))))
+  (let loop ((senv senv) (k 0))
+    (pmatch senv
+      (() (error 'apply-env "unbound variable" var))
+      (((,v . ,b) . ,senv*)
+       (if (eqv? var v)
+           (cons k b)
+           (loop senv* (+ k 1)))))))
 
-;; Another cheap conversion!
+;; No recursive bindings.
 ;; list->senv : List-of(Sym) → Senv
 (define (list->senv ss)
   (assert (pair-or-null? ss))
   (assert (for-all symbol? ss))
-  ss)
+  (map (lambda (s) (cons s #f)) ss))
 
 ;; The initial environment from PROC, staticized.
 ;; init-senv : () → Senv
@@ -215,7 +239,11 @@
   (assert (PROC-expression? exp))
   (cond ((const-exp? exp) exp)
         ((var-exp? exp)
-         (make-nameless-var-exp (apply-senv senv (var-exp-var exp))))
+         (let* ((p (apply-senv senv (var-exp-var exp)))
+                (addr (car p)))
+           (if (cdr p)  ; letrec bound variable?
+               (make-nameless-rec-var-exp addr)
+               (make-nameless-var-exp addr))))
         ((diff-exp? exp)
          (make-diff-exp (translation-of (diff-exp-exp1 exp) senv)
                         (translation-of (diff-exp-exp2 exp) senv)))
@@ -230,6 +258,15 @@
           (translation-of (let-exp-exp1 exp) senv)
           (translation-of (let-exp-body exp)
                           (extend-senv (let-exp-var exp) senv))))
+        ((letrec-exp? exp)
+         (let ((name (letrec-exp-proc-name exp))
+               (p-body (letrec-exp-proc-body exp))
+               (b-var (letrec-exp-bound-var exp))
+               (lr-body (letrec-exp-letrec-body exp)))
+           (let ((senv* (extend-senv-rec name senv)))
+             (make-nameless-letrec-exp
+              (translation-of p-body (extend-senv b-var senv*))
+              (translation-of lr-body senv*)))))
         ((proc-exp? exp)
          (make-nameless-proc-exp
           (translation-of (proc-exp-body exp)
@@ -284,6 +321,9 @@
     (emptylist (make-empty-list-exp))
     (,v (guard (symbol? v)) (make-var-exp v))
     ((let ,v = ,s in ,b) (make-let-exp v (parse s) (parse b)))
+    ((letrec ,f (,v) = ,e in ,b)
+     (guard (symbol? f) (symbol? v))
+     (make-letrec-exp f v (parse e) (parse b)))
     ((proc (,v) ,body) (guard (symbol? v))
      (make-proc-exp v (parse body)))
     ((cond . ,cs) (make-cond-exp (map (on-pair parse) cs)))
@@ -309,6 +349,8 @@
   (cond ((const-exp? exp) (const-exp-num exp))
         ((nameless-var-exp? exp)
          (lex-addr->symbol (nameless-var-exp-index exp)))
+        ((nameless-rec-var-exp? exp)
+         `(REC ,(lex-addr->symbol (nameless-rec-var-exp-index exp))))
         ((diff-exp? exp)
          `(- ,(unparse (diff-exp-exp1 exp))
              ,(unparse (diff-exp-exp2 exp))))
@@ -322,6 +364,9 @@
         ((nameless-let-exp? exp)
          `(let ,(unparse (nameless-let-exp-exp1 exp))
            in ,(unparse (nameless-let-exp-body exp))))
+        ((nameless-letrec-exp? exp)
+         `(letrec (proc ,(unparse (nameless-letrec-exp-proc-body exp)))
+           in ,(unparse (nameless-letrec-exp-letrec-body exp))))
         ((nameless-proc-exp? exp)
          `(proc ,(unparse (nameless-proc-exp-body exp))))
         ((nameless-unpack-exp? exp)
@@ -364,9 +409,15 @@
 (define (extend-nameless-env val env)
   (cons val env))
 
-;; apply-nameless-env : Nameless-env × Lexaddr → Nameless-env
+;; apply-nameless-env : Nameless-env × Lexaddr → Exp-val
 (define (apply-nameless-env env n)
   (list-ref env n))
+
+;; apply-nameless-env-rec : Nameless-env × Lexaddr → Exp-val
+(define (apply-nameless-env-rec env n)
+  (if (zero? n)
+      (make-proc-val (make-proc (car env) env))
+      (apply-nameless-env (cdr env) (- n 1))))
 
 ;; init-nameless-env : () → Nameless-env
 (define (init-nameless-env) (map make-num-val '(1 5 10)))
@@ -438,10 +489,17 @@
                              (list-exp-exps exp))))
         ((nameless-var-exp? exp)
          (apply-nameless-env env (nameless-var-exp-index exp)))
+        ((nameless-rec-var-exp? exp)
+         (apply-nameless-env-rec env (nameless-rec-var-exp-index exp)))
         ((nameless-let-exp? exp)
          (let ((val (value-of (nameless-let-exp-exp1 exp) env)))
            (value-of (nameless-let-exp-body exp)
                      (extend-nameless-env val env))))
+        ((nameless-letrec-exp? exp)
+         (value-of (nameless-letrec-exp-letrec-body exp)
+                   (extend-nameless-env
+                    (nameless-letrec-exp-proc-body exp)
+                    env)))
         ((nameless-proc-exp? exp)
          (make-proc-val (make-proc (nameless-proc-exp-body exp) env)))
         ((nameless-unpack-exp? exp)
