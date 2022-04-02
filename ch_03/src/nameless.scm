@@ -1,5 +1,6 @@
 ;;;; PROC → Nameless compiler from section 3.7, and nameless
-;;;; interpreter.
+;;;; interpreter.  Extended to handle multi-argument lets,
+;;;; procedures, and calls.
 
 (import (rnrs records syntactic (6))
         (rnrs lists (6)))
@@ -26,7 +27,7 @@
   (fields exp1 exp2 exp3))
 
 (define-record-type call-exp
-  (fields rator rand))
+  (fields rator rands))
 
 ;;; PROC-only expressions
 
@@ -34,10 +35,10 @@
   (fields var))
 
 (define-record-type let-exp
-  (fields var exp1 body))
+  (fields vars exps body))
 
 (define-record-type proc-exp
-  (fields var body))
+  (fields vars body))
 
 (define (PROC-expression? obj)
   (or (const-exp? obj)
@@ -91,10 +92,10 @@
 ;; A var-exp in nameless is the lexical address of a
 ;; corresponding declaration.
 (define-record-type nameless-var-exp
-  (fields index))
+  (fields addr))
 
 (define-record-type nameless-let-exp
-  (fields exp1 body))
+  (fields exps body))
 
 (define-record-type nameless-proc-exp
   (fields body))
@@ -111,27 +112,47 @@
 
 ;;; Static environments
 
-;; Senv     = List-of(Sym)
-;; Lex-addr = ℕ
+;; Senv     = List-of(List-of(Sym))
+;; Lex-addr = Nat × Nat
+
+(define (make-lex-addr ri si) (cons ri si))
+(define (rib-index addr) (car addr))
+(define (symbol-index addr) (cdr addr))
 
 ;; empty-senv : () → Senv
 (define (empty-env) '())
 
-;; extend-senv : Var × Senv → Senv
-(define (extend-senv var senv) (cons var senv))
+;; extend-senv : List-of(Var) × Senv → Senv
+(define (extend-senv vars senv) (cons vars senv))
 
 ;; apply-senv : Senv × Var → Lex-addr
 (define (apply-senv senv var)
-  (cond ((null? senv) (error 'apply-env "unbound variable" var))
-        ((eqv? var (car senv)) 0)
-        (else (+ 1 (apply-senv (cdr senv) var)))))
+  (letrec
+   ((index-of-rib
+     (lambda (senv)
+       (pmatch senv
+         (() (error 'apply-senv "unbound variable" var))
+         ((,vs . ,senv*)
+          (if (memv var vs)
+              0
+              (+ 1 (index-of-rib senv*))))))))
+    (let ((i (index-of-rib senv)))
+      (make-lex-addr i (index-of var (list-ref senv i))))))
 
-;; Another cheap conversion!
+;; index-of : List × * → Nat
+(define (index-of x lis)
+  (pmatch lis
+    (() (error 'index-of "symbol not found" x))
+    ((,y . ,ys)
+     (if (eqv? x y)
+         0
+         (+ 1 (index-of x ys))))))
+
 ;; list->senv : List-of(Sym) → Senv
 (define (list->senv ss)
   (assert (pair-or-null? ss))
   (assert (for-all symbol? ss))
-  ss)
+  (list ss))
 
 ;; The initial environment from PROC, staticized.
 ;; init-senv : () → Senv
@@ -156,16 +177,18 @@
                       (translation-of (if-exp-exp3 exp) senv)))
         ((let-exp? exp)
          (make-nameless-let-exp
-          (translation-of (let-exp-exp1 exp) senv)
+          (map (lambda (e) (translation-of e senv))
+               (let-exp-exps exp))
           (translation-of (let-exp-body exp)
-                          (extend-senv (let-exp-var exp) senv))))
+                          (extend-senv (let-exp-vars exp) senv))))
         ((proc-exp? exp)
          (make-nameless-proc-exp
           (translation-of (proc-exp-body exp)
-                          (extend-senv (proc-exp-var exp) senv))))
+                          (extend-senv (proc-exp-vars exp) senv))))
         ((call-exp? exp)
          (make-call-exp (translation-of (call-exp-rator exp) senv)
-                        (translation-of (call-exp-rand exp) senv)))
+                        (map (lambda (e) (translation-of e senv))
+                             (call-exp-rands exp))))
         (else (error 'translation-of "unknown expression type" exp))))
 
 ;; translation-of-program : Program → Nameless-program
@@ -234,34 +257,40 @@
 
 ;;; Nameless environments
 
-;; nameless-environment? : Scheme-val → Bool
-(define (nameless-environment? x)
-  (and (pair-or-null? x)
-       (for-all expval? x)))
+;;; Nameless-env = List-of(List-of(Exp-val))
 
 ;; empty-nameless-env : () → Nameless-env
 (define (empty-nameless-env) '())
 
-;; extend-nameless-env : Expval × Nameless-env → Nameless-env
-(define (extend-nameless-env val env)
-  (cons val env))
+;; extend-nameless-env : List-of(Expval) × Nameless-env → Nameless-env
+(define (extend-nameless-env vals env)
+  (assert (pair-or-null? vals))
+  (cons vals env))
 
 ;; apply-nameless-env : Nameless-env × Lexaddr → Nameless-env
-(define (apply-nameless-env env n)
-  (list-ref env n))
+(define (apply-nameless-env env addr)
+  (letrec
+   ((lookup
+     (lambda (e i)
+       (cond ((null? e)
+              (error 'apply-nameless-env "unbound lex-addr" addr env))
+             ((zero? i) (list-ref (car e) (symbol-index addr)))
+             (else (lookup (cdr e) (- i 1)))))))
+
+    (lookup env (rib-index p))))
 
 ;; init-nameless-env : () → Nameless-env
-(define (init-nameless-env) (map make-num-val '(1 5 10)))
+(define (init-nameless-env) (list (map make-num-val '(1 5 10))))
 
 ;;; (Nameless) procedures
 
 (define-record-type proc
   (fields body saved-nameless-env))
 
-;; apply-procedure : Proc × Exp-val → Exp-val
-(define (apply-procedure proc1 val)
+;; apply-procedure : Proc × List-of(Exp-val) → Exp-val
+(define (apply-procedure proc1 vals)
   (value-of (proc-body proc1)
-            (extend-nameless-env val
+            (extend-nameless-env vals
                                  (proc-saved-nameless-env proc1))))
 
 ;; value-of : Nameless-exp × Nameless-env → Exp-val
@@ -285,14 +314,16 @@
                (value-of (if-exp-exp3 exp) env))))
         ((call-exp? exp)
          (let ((proc (expval->proc (value-of (call-exp-rator exp) env)))
-               (arg (value-of (call-exp-rand exp) env)))
-           (apply-procedure proc arg)))
+               (args (map (lambda (e) (value-of e env))
+                          (call-exp-rands exp))))
+           (apply-procedure proc args)))
         ((nameless-var-exp? exp)
          (apply-nameless-env env (nameless-var-exp-index exp)))
         ((nameless-let-exp? exp)
-         (let ((val (value-of (nameless-let-exp-exp1 exp) env)))
+         (let ((vals (map (lambda (e) (value-of e env))
+                          (nameless-let-exp-exps exp))))
            (value-of (nameless-let-exp-body exp)
-                     (extend-nameless-env val env))))
+                     (extend-nameless-env vals env))))
         ((nameless-proc-exp? exp)
          (make-proc-val (make-proc (nameless-proc-exp-body exp) env)))
         (else (error 'value-of "invalid expression type" exp))))
