@@ -171,7 +171,7 @@
          (make-diff-exp (translation-of (diff-exp-exp1 exp) senv)
                         (translation-of (diff-exp-exp2 exp) senv)))
         ((zero?-exp? exp)
-         (make-zero?-exp (translation-of (zero?-exp1 exp) senv)))
+         (make-zero?-exp (translation-of (zero?-exp-exp1 exp) senv)))
         ((if-exp? exp)
          (make-if-exp (translation-of (if-exp-exp1 exp) senv)
                       (translation-of (if-exp-exp2 exp) senv)
