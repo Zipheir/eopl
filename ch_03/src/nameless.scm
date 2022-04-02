@@ -210,10 +210,13 @@
     ((zero? ,s) (make-zero?-exp (parse s)))
     ((if ,t ,c ,a) (make-if-exp (parse t) (parse c) (parse a)))
     (,v (guard (symbol? v)) (make-var-exp v))
-    ((let ,v = ,s in ,b) (make-let-exp v (parse s) (parse b)))
-    ((proc (,v) ,body) (guard (symbol? v))
-     (make-proc-exp v (parse body)))
-    ((,e1 ,e2) (make-call-exp (parse e1) (parse e2)))
+    ((let ,binds in ,b) (guard (pair-or-null? binds))
+     (make-let-exp (map car binds)
+                   (map (lambda (p) (parse (cadr p))) binds)
+                   (parse b)))
+    ((proc ,vs ,body) (guard (pair-or-null? vs))
+     (make-proc-exp vs (parse body)))
+    ((,e1 . ,es) (make-call-exp (parse e1) (map parse es)))
     (? (error 'parse "invalid syntax" sexp))))
 
 ;; parse-program : List → Program
@@ -225,8 +228,7 @@
 ;; unparse : Nameless-exp → List
 (define (unparse exp)
   (cond ((const-exp? exp) (const-exp-num exp))
-        ((nameless-var-exp? exp)
-         (lex-addr->symbol (nameless-var-exp-index exp)))
+        ((nameless-var-exp? exp) `($ ,(nameless-var-exp-addr exp)))
         ((diff-exp? exp)
          `(- ,(unparse (diff-exp-exp1 exp))
              ,(unparse (diff-exp-exp2 exp))))
@@ -236,13 +238,13 @@
               ,(unparse (if-exp-exp2 exp))
               ,(unparse (if-exp-exp3 exp))))
         ((nameless-let-exp? exp)
-         `(let ,(unparse (nameless-let-exp-exp1 exp))
+         `(let ,(map unparse (nameless-let-exp-exps exp))
            in ,(unparse (nameless-let-exp-body exp))))
         ((nameless-proc-exp? exp)
          `(proc ,(unparse (nameless-proc-exp-body exp))))
         ((call-exp? exp)
-         (list (unparse (call-exp-rator exp))
-               (unparse (call-exp-rand exp))))
+         (cons (unparse (call-exp-rator exp))
+               (map unparse (call-exp-rands exp))))
         (else (error 'unparse "unknown expression type" exp))))
 
 ;; The book uses #k, but that's datum syntax, so I use $k instead.
@@ -277,7 +279,7 @@
              ((zero? i) (list-ref (car e) (symbol-index addr)))
              (else (lookup (cdr e) (- i 1)))))))
 
-    (lookup env (rib-index p))))
+    (lookup env (rib-index addr))))
 
 ;; init-nameless-env : () → Nameless-env
 (define (init-nameless-env) (list (map make-num-val '(1 5 10))))
@@ -318,7 +320,7 @@
                           (call-exp-rands exp))))
            (apply-procedure proc args)))
         ((nameless-var-exp? exp)
-         (apply-nameless-env env (nameless-var-exp-index exp)))
+         (apply-nameless-env env (nameless-var-exp-addr exp)))
         ((nameless-let-exp? exp)
          (let ((vals (map (lambda (e) (value-of e env))
                           (nameless-let-exp-exps exp))))
