@@ -6,6 +6,7 @@
         (rnrs lists (6)))
 
 (include "pmatch.scm")
+(include "../../src/test.scm")
 
 (define (pair-or-null? x) (or (pair? x) (null? x)))
 
@@ -336,9 +337,31 @@
 
 ;;; Main compiler/interpreter driver
 
-(define (compile-and-run sexp)
+(define (compile-and-run sexp print-translation)
   (let ((prog (translation-of-program (parse-program sexp))))
-    (display "Translated program: ")
-    (display (unparse-program prog))
-    (newline)
+    (when print-translation
+      (display "Translated program: ")
+      (display (unparse-program prog))
+      (newline))
     (value-of-program prog)))
+
+;;;; Tests
+
+(define (eval-to-num sexp) (expval->num (compile-and-run sexp #f)))
+
+(define (run-tests)
+  (test 3 (eval-to-num '3))
+  (test 1 (eval-to-num 'i))
+  (test 4 (eval-to-num '(- 5 1)))
+  (test 1 (eval-to-num '(if (zero? 0) 1 0)))
+  (test 0 (eval-to-num '(if (zero? 2) 1 0)))
+  (test 5 (eval-to-num '(let ((a 5)) in a)))
+  (test 6 (eval-to-num '(let ((f (proc (a) (- a (- 0 1))))) in (f 5))))
+  (test 5 (eval-to-num '(let ((a 7) (b 4) (c 2)) in (- a (- b c)))))
+  (test 8 (eval-to-num '(let ((add (proc (a b) (- a (- 0 b)))))
+                         in (add 3 5))))
+  (test 1 (eval-to-num '(let ((add1 (proc (x) (- x (- 0 1)))) (a 3))
+                         in (let ((b (- a 1)) (c (add1 a)))
+                             in (let ((d (- c b)) (e (add1 c)))
+                                 in (- a d))))))
+  )
