@@ -64,3 +64,24 @@ in letrec even(dummy) =
                       (even 888)
                     end
 in begin setref(x, 13); (odd 888) end
+
+Here, the procedures odd and even communicate through the location
+denoted by x, instead of passing values back and forth.
+
+"[C]ommunication through a shared variable can be a kind of
+information hiding" (p. 105), since two procedures in a chain can
+use the variable rather than the rest of the chain having to pass the
+shared data along.
+
+I think the term "hiding" is a little misleading.  The big problem
+with mutable variables scoped over many procedures is that they are
+*not* hidden from procedures that don't need them.
+
+Since EXPLICIT-REFS allows any expressed value to be stored in a
+location, references can themselves be stored:
+
+let x = newref(newref(0));
+in begin
+     setref(deref(x), 11);
+     deref(deref(x));
+   end
