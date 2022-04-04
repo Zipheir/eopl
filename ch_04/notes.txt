@@ -85,3 +85,99 @@ in begin
      setref(deref(x), 11);
      deref(deref(x));
    end
+
+### 4.2.1 Store-passing
+
+Any expression in this language can have an effect.
+
+In the specification, σ will range over stores.  If σ is a store,
+then [l = v]σ is a store "just like σ", except that the location l
+is mapped to the value v.
+
+In a *store-passing specification*, the store is passed to the
+interpreter as an explicit argument.  The interpreter then returns
+a new store.  e.g.
+
+(value-of exp₁ ρ σ₀) = (val₁, σ₁)
+
+So a "pure" operation looks like
+
+(value-of (const-exp n) ρ σ) = (n, σ)
+
+Here, "the store is unchanged" by the evaluation of the constant
+expression.
+
+The specification of diff-exps:
+
+               (value-of exp₁ ρ σ₀) = (val₁, σ₁)
+               (value-of exp₂ ρ σ₁) = (val₂, σ₂)
+--------------------------------------------------------------
+(value-of (diff-exp exp₁ exp₂) ρ σ₀) = (⌈⌊val₁⌋ - ⌊val₂⌋⌉, σ₂)
+
+Here, the store is threaded sequentially through the evaluation.
+Note that, once the subexpresions have been evaluated, the evaluation
+of the diff-exp itself doesn't have any further effects on the store.
+
+if expressions;
+
+               (value-of exp₁ ρ σ₀) = (val₁, σ₁)
+--------------------------------------------------------------
+  (value-of (if-exp exp₁ exp₂ exp₃ ρ σ₀))
+       ⎧ (value-of exp₂ ρ σ₁)    if (expval->bool val₁) = #t
+     = ⎨
+       ⎩ (value-of exp₃ ρ σ₁)    if (expval->bool val₁) = #f
+
+See Exs. 4.2 through 4.5 for specs. of other familiar forms.
+
+### 4.2.2 Operations on explicit references
+
+Expression ::= newref (Expression)
+               [newref-exp (exp1)]
+
+           ::= deref (Expression)
+               [deref-exp (exp1)]
+
+           ::= setref (Expression , Expression)
+               [setref-exp (exp1 exp2)]
+
+Here are the specs:
+
+    (value-of exp ρ σ₀) = (val, σ₁)       l ∉ dom(σ₁)
+-------------------------------------------------------------
+ (value-of (newref-exp exp) ρ σ₀) = ((ref-val l), [l=val]σ₁)
+
+The requirement l ∉ dom(σ₁) ensures that the location l is fresh.
+
+         (value-of exp ρ σ₀) = (l, σ₁)
+-----------------------------------------------
+ (value-of (deref-exp exp) ρ σ₀) = (σ₁(l), σ₁)
+
+
+             (value-of exp₁ ρ σ₀) = (l, σ₁)
+            (value-of exp₂ ρ σ₁) = (val, σ₂)
+------------------------------------------------------------
+ (value-of (setref-exp exp₁ exp₂) ρ σ₀) = (⌈23⌉, [l=val]σ₂)
+
+The value of a setref expression is completely arbitrary, so here
+it's specified to be the numeric value 23.
+
+### 4.2.3 Implementation
+
+The specification of EXPLICIT-REFS doesn't express a crucial fact
+that we've assumed about the language: that there is *one* store.
+So all of the σs of the above will not, in practice, be different
+values, but states of one real location.
+
+The book's model implementation use the Scheme effects to model
+effects in EXPLICIT-REFS, and uses a Scheme value to represent the
+state of the store.  The store-passing of the specification is
+hidden; instead, the store state is represented by a single global
+variable.
+
+The store is represented by a list of values; a reference is an
+index into this list.  New references are added by appending values.
+
+The store has to be initialized before a program is evaluated.  In
+the implementation, this means setting it to the empty list.
+
+See src/explicit-refs-base.scm for the implementation.
