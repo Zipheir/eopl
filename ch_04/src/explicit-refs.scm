@@ -8,14 +8,22 @@
 
 ;;;; Stores
 
+;; Constant.  Number of locations in the store.  Exceeding this
+;; will cause an out-of-memory error.
+(define store-size 256)
+
 ;; Contains the current state of the store.
 (define the-store 'uninitialized)
 
+;; Index of the next free location in the store.
+(define store-index 'uninitialized)
+
 ;; empty-store : () -> Sto
-(define (empty-store) '())
+(define (empty-store) (make-vector store-size))
 
 ;; initialize-store! : () -> Unspecified
 (define (initialize-store!)
+  (set! store-index 0)
   (set! the-store (empty-store)))
 
 ;; reference? : Scheme-val -> Bool
@@ -24,26 +32,20 @@
 
 ;; newref : Exp-val -> Ref
 (define (newref val)
-  (let ((next-ref (length the-store)))
-    (set! the-store (append the-store (list val)))
-    next-ref))
+  (if (>= store-index store-size)
+      (error 'newref "store space exceeded" store-index)
+      (let ((ref store-index))
+        (vector-set! the-store ref val)
+        (set! store-index (+ store-index 1))
+        ref)))
 
 ;; deref : Ref -> Exp-val
 (define (deref ref)
-  (list-ref the-store ref))
+  (vector-ref the-store ref))
 
 ;; setref! : Ref x Exp-val -> Unspecified
 (define (setref! ref val)
-  (letrec
-    ((setref-inner
-      (lambda (store1 ref1)
-        (cond ((null? store1)
-               (report-invalid-reference ref the-store))
-              ((zero? ref1) (cons val (cdr store1)))
-              (else (cons (car store1)
-                          (setref-inner (cdr store1)
-                                        (- ref1 1))))))))
-    (set! the-store (setref-inner the-store ref))))
+  (vector-set! the-store ref val))
 
 ;;;; Expressions
 
