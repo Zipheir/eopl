@@ -1,0 +1,10 @@
+# Exercise 4.2
+
+zero? expressions for EXPLICIT-REFS:
+
+         (value-of exp₁ ρ σ₀) = (val, σ₁)
+-------------------------------------------------
+ (value-of (zero?-exp exp₁) ρ σ₀)
+     ⎧ (bool-val #t)    if (expval->num val) = 0
+   = ⎨
+     ⎩ (bool-val #f)    if (expval->num val) ≠ 0

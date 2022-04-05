@@ -1,0 +1,15 @@
+# Exercise 4.4
+
+This is more interesting than the previous exercises.  Here's the
+syntax for begin expressions:
+
+Expression ::= begin Expression {; Expression}* end
+               [begin-exp (exps)]
+
+The semantics:
+
+              (value-of exp₁ ρ σ₀) = (val₁, σ₁)
+                            ⋮
+              (value-of expₙ ρ σₙ₋₁) = (valₙ, σₙ)
+----------------------------------------------------------
+ (value-of (begin-exp (exp₁ … expₙ)) ρ σ₀) = (valₙ, σₙ)

@@ -1,0 +1,18 @@
+# Exercise 4.3
+
+call expressions for EXPLICIT-REFS:
+
+       (value-of rator ρ σ₀) = (vrat, σ₁)
+       (value-of rand ρ σ₁) = (vrand, σ₂)
+--------------------------------------------------
+ (value-of (call-exp rator rand) ρ σ₀) =
+   (apply-procedure (expval->proc vrat) vrand σ₂)
+
+and
+
+(apply-procedure (procedure var body ρ) val σ)
+  = (value-of body [var=val]ρ σ)
+
+As with zero? expressions, the implementation of this form
+doesn't really change from its PROC version; the state arguments
+disappear in (mutative) practice.
