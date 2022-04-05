@@ -1,0 +1,18 @@
+# Exercise 4.9
+
+There are at least two interpretations of "representing [the store]
+as a Scheme vector".  The most obvious one is to use a fixed-size
+vector and to maintain an index value which points to the next free
+location in the store.  This makes all of the reference operations as
+fast as the underlying vector-ref and vector-set! procedures.  Of
+course, the downside is that such a store is very finite, and
+exceeding the arbitrary store size will cause an out-of-memory error.
+
+Another interpretation is to have a dynamically growing vector, using
+vector-append to create new locations.  This avoids the arbitrary
+memory limit but makes newref very space-expensive.
+
+The best approach to a vector store is to use flexible vectors, which
+are common in recent imperative languages.  A good implementation of
+those would give you constant-time access and amortized constant-time
+insert, without the arbitrary index-space limit.
