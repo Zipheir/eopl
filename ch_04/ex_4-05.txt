@@ -1,0 +1,32 @@
+# Exercise 4.5
+
+Lists for EXPLICIT-REFS, or at least 'list'.
+
+The basic list operations are what you'd expect, at least given our
+left-to-right state passing.  Here's cons:
+
+           (value-of exp₁ ρ σ₀) = (va, σ₁)
+           (value-of exp₂ ρ σ₁) = (vd, σ₂)
+-----------------------------------------------------
+ (value-of (cons-exp (exp₁ exp₂)) ρ σ₀) =
+   ((make-list-val (cons va (expval->list vd))), σ₂)
+
+Once again, I'm representing list values internally by lists of
+expressed values.  (Which reminds me that, while the book has had
+many exercises involving lists, they've yet to show a way to
+implement them.  Really, what are you supposed to do if you get stuck
+in this book?)
+
+Anyway, here's list.  It's reminiscent of begin, except that values
+are accumulated:
+
+--------------------------------------------------------- list-∅
+ (value-of (list-exp ()) ρ σ) = ((make-list-val '()), σ)
+
+
+    (value-of exp₁ ρ σ₀) = (val₁, σ₁)
+                      ⋮
+    (value-of expₙ ρ σₙ₋₁) = (valₙ, σₙ)
+-------------------------------------------- begin-ne
+ (value-of (list-exp (exp₁ … expₙ)) ρ σ₀) =
+   ((make-list-val (val₁ … valₙ)), σₙ)
