@@ -16,3 +16,16 @@ The best approach to a vector store is to use flexible vectors, which
 are common in recent imperative languages.  A good implementation of
 those would give you constant-time access and amortized constant-time
 insert, without the arbitrary index-space limit.
+
+The exercise asks "what is lost by using this representation?"  Using
+a statically-sized vector-based store, we lose the ability to run
+arbitrary programs without running out of memory--a program could
+always need one more location than we've allocated.  You might say
+that the same problem exists with any program, but the difference here
+is the initialization overhead.  We can also run out of (Scheme)
+memory with a list representation, but there initialize-store! runs in
+constant space and time.  Allocating a vector "big enough for all
+practical purposes" could be very expensive if those purposes require
+thousands of locations.  So the fast store operations of this
+representation come with either massive space usage out of the gate,
+or with very limited store space.
