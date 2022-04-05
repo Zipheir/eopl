@@ -8,8 +8,13 @@ Expression ::= begin Expression {; Expression}* end
 
 The semantics:
 
+--------------------------------------------- begin-∅
+ (value-of (begin-exp ()) ρ σ₀) = (⌈23⌉, σₙ)
+
+(an empty begin expression evaluates to an arbitrary value), and
+
               (value-of exp₁ ρ σ₀) = (val₁, σ₁)
                             ⋮
               (value-of expₙ ρ σₙ₋₁) = (valₙ, σₙ)
-----------------------------------------------------------
+---------------------------------------------------------- begin-ne
  (value-of (begin-exp (exp₁ … expₙ)) ρ σ₀) = (valₙ, σₙ)
