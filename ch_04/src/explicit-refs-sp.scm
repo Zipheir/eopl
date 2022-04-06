@@ -78,6 +78,9 @@
 (define-record-type setref-exp
   (fields exp1 exp2))
 
+(define-record-type begin-exp
+  (fields exps))
+
 ;;;; Expressed values
 
 (define-record-type ref-val
@@ -191,6 +194,8 @@
 
 ;;; Answer = Exp-val x Sto
 
+(define the-unspecified-value (make-num-val 23))
+
 ;; value-of-program : Program -> Exp-val
 (define (value-of-program pgm)
   (car (value-of (program-exp1 pgm) (init-env) (empty-store))))
@@ -219,6 +224,7 @@
         ((newref-exp? exp) (value-of-newref-exp exp env sto))
         ((deref-exp? exp) (value-of-deref-exp exp env sto))
         ((setref-exp? exp) (value-of-setref-exp exp env sto))
+        ((begin-exp? exp) (value-of-begin-exp exp env sto))
         (else (error 'value-of "invalid expression" exp))))
 
 ;; value-of-diff-exp : Exp x Env x Sto -> Answer
@@ -283,6 +289,13 @@
         (list (make-num-val 23)
               (setref (expval->ref lval) val sto2)))))))
 
+;; value-of-begin-exp : Exp x Env x Sto -> Answer
+;; This is fun.
+(define (value-of-begin-exp exp env sto0)
+  (fold-left (lambda (ans e) (value-of e env (cadr ans)))
+             (list the-unspecified-value sto0)
+             (begin-exp-exps exp)))
+
 ;; Parser for a simple S-exp representation.
 ;; parse : List -> Exp
 (define (parse sexp)
@@ -302,6 +315,7 @@
     ((newref ,e) (make-newref-exp (parse e)))
     ((deref ,e) (make-deref-exp (parse e)))
     ((setref ,re ,ve) (make-setref-exp (parse re) (parse ve)))
+    ((begin . ,es) (make-begin-exp (map parse es)))
     ((,e1 ,e2) (make-call-exp (parse e1) (parse e2)))
     (? (error 'parse "invalid syntax" sexp))))
 
@@ -345,4 +359,18 @@
            '(let pn = (newref 3) in
               (let dummy = (setref pn (- (deref pn) (- 0 1))) in
                 (deref pn)))))
+
+  ;; begin (ex. 4.4)
+  (test 3 (eval-to-num '(begin 1 2 3)))
+  (test 3 (eval-to-num
+           '(let a = (newref 0) in (begin (setref a 3) (deref a)))))
+  (test 5 (eval-to-num '(begin (let v = 7 in (begin)) v)))
+  (test 4 (eval-to-num
+           '(let g = (let c = (newref 0)
+                      in (proc (dum)
+                           (begin
+                            (setref c (- (deref c) (- 0 1)))
+                            (deref c))))
+             ;in (begin (g 0) (g 0) (g 0) (g 0)))))
+             in (g 0))))
   )
