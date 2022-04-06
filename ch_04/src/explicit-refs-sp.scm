@@ -218,7 +218,7 @@
                    sto))
         ((proc-exp? exp)
          (list (make-proc-val
-                (procedure (proc-exp-var exp) (proc-exp-body exp)))
+                (procedure (proc-exp-var exp) (proc-exp-body exp) env))
                sto))
         ((call-exp? exp) (value-of-call-exp exp env sto))
         ((newref-exp? exp) (value-of-newref-exp exp env sto))
