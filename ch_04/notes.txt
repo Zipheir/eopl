@@ -243,3 +243,17 @@ whatever reason.
 
 See src/implcit-refs.scm for (the adapted version of) the book's
 implementation.
+
+## Explicit vs. implicit
+
+It's worth noting some of the strengths and weaknesses of the two
+approaches to references.  EXPLICIT-REFS gives you some control over
+mutation, since assignment can *only* happen through reference values;
+it's a type error to try to "mutate a variable".  This isolates the
+feature, and may make programs easier to understand.  (It's similar to
+modern imperative languages that provide mutable and immutable variables.)
+
+On the other hand, IMPLICIT-REFS makes things *much* simpler by dispensing
+with reference values, which makes confusing (if powerful) techniques
+like reference chaining impossible.  Still, in this language every
+variable is mutable.
