@@ -181,3 +181,51 @@ The store has to be initialized before a program is evaluated.  In
 the implementation, this means setting it to the empty list.
 
 See src/explicit-refs-base.scm for the implementation.
+
+## 4.3 IMPLICIT-REFS
+
+Languages with implicit references do not have references as
+expressed values.  Instead, these languages "take common patterns
+of allocation, dereferencing, and mutation, and package them up
+as part of the language."
+
+Here, every variable denotes a reference, and every denoted value
+is a reference to a location containing an expressed value:
+
+Exp-val = Int + Bool + Proc
+Den-val = Ref(Exp-val)
+
+To evaluate a variable expression in this language, two lookups are
+required: first, in an environment, to find the reference, and
+second, in the store, to find the contents of the location denoted
+by that reference.
+
+Location contents are changed by the 'set' form:
+
+Expression ::= set Identifier = Expression
+               [assign-exp (var exp1)]
+
+This language, like Scheme, has mutable variables.  Since references
+aren't expressed values, chains of references ("pointers to pointers")
+are impossible in this language.
+
+### 4.3.1 Specification
+
+The two-step dereference-then-lookup semantics for var-exps:
+
+(value-of (var-exp var) ρ σ) = (σ(ρ(var)), σ)
+
+Assignment:
+
+                 (value-of exp₁ ρ σ₀) = (val₁, σ₁)
+-------------------------------------------------------------------
+ (value-of (assign-exp var exp₁) ρ σ₀) = (⌈27⌉, [ρ(var) = val₁]σ₁)
+
+Application:
+
+(apply-procedure (procedure var body ρ) val σ) =
+  (value-of body [var = l]ρ [l = val]σ)
+
+Here, l is a location not in the domain of σ.  As in Scheme, the body
+is evaluated in an environment in which var is bound to a fresh
+location containing val.
