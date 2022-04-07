@@ -229,3 +229,17 @@ Application:
 Here, l is a location not in the domain of σ.  As in Scheme, the body
 is evaluated in an environment in which var is bound to a fresh
 location containing val.
+
+See ex_4-14.txt for the let specification.
+
+### 4.3.2 IMPLICIT-REFS implementation
+
+The main question with the implementation is when new references
+are created.  This occurs in exactly four places: in environment
+initialization, lets, letrecs, and procedure calls.
+
+IMPLICIT-REFS also uses multi-binding letrec from Ex. 3.32, for
+whatever reason.
+
+See src/implcit-refs.scm for (the adapted version of) the book's
+implementation.
