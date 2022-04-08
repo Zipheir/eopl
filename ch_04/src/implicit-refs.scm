@@ -1,10 +1,19 @@
-;;;; IMPLICIT-REFS language from Ch. 4.
+;;;; IMPLICIT-REFS language from Ch. 4, with multi-parameter
+;;;; extensions from Ex. 4.17, etc.
 
 (import (rnrs lists (6))
         (rnrs records syntactic (6)))
 
 (include "pmatch.scm")
 (include "../../src/test.scm")
+
+;; zip : List x List -> List
+(define (zip xs ys)
+  (cond ((null? xs) '())
+        ((null? ys) '())
+        (else
+         (cons (cons (car xs) (car ys))
+               (zip (cdr xs) (cdr ys))))))
 
 ;;;; Stores
 
@@ -63,13 +72,13 @@
   (fields var))
 
 (define-record-type let-exp
-  (fields var exp1 body))
+  (fields vars exps body))
 
 (define-record-type proc-exp
-  (fields var body))
+  (fields vars body))
 
 (define-record-type call-exp
-  (fields rator rand))
+  (fields rator rands))
 
 (define-record-type letrec-exp
   (fields p-names b-vars p-bodies letrec-body))
@@ -117,15 +126,14 @@
 ;;;; Procedures
 
 (define-record-type proc
-  (fields var body saved-env))
+  (fields vars body saved-env))
 
 (define procedure make-proc)
 
-;; apply-procedure : Proc x Exp-val -> Exp-val
-(define (apply-procedure proc1 val)
+;; apply-procedure : Proc x List-of(Exp-val) -> Exp-val
+(define (apply-procedure proc1 vals)
   (value-of (proc-body proc1)
-            (extend-env (proc-var proc1)
-                        (newref val)
+            (extend-env (zip (proc-vars proc1) (map newref vals))
                         (proc-saved-env proc1))))
 
 ;;;; Environments
@@ -133,7 +141,7 @@
 (define-record-type (empty-environment empty-env empty-env?))
 
 (define-record-type (extended-env extend-env extended-env?)
-  (fields var val rest-env))
+  (fields binds rest-env))
 
 (define-record-type (extended-env-rec extend-env-rec extended-env-rec?)
   (fields p-names b-vars p-bodies env))
@@ -147,9 +155,9 @@
 (define (apply-env env search-var)
   (cond ((empty-env? env) (report-no-binding-found search-var))
         ((extended-env? env)
-         (if (eqv? search-var (extended-env-var env))
-             (extended-env-val env)
-             (apply-env (extended-env-rest-env env) search-var)))
+         (cond ((assv search-var (extended-env-binds env)) => cdr)
+               (else (apply-env (extended-env-rest-env env)
+                                search-var))))
         ((extended-env-rec? env)
          (let ((b-vars (extended-env-rec-b-vars env))
                (p-bodies (extended-env-rec-p-bodies env)))
@@ -184,10 +192,7 @@
 ;; alist->env : List-of(Var x Scheme-val) -> Env
 ;; No recursive bindings.
 (define (alist->env as)
-  (fold-right (lambda (p env)
-                (extend-env (car p) (newref (cdr p)) env))
-              (empty-env)
-              as))
+  (extend-env as (empty-env)))
 
 ;;; Initial environment
 
@@ -230,19 +235,19 @@
                (value-of (if-exp-exp2 exp) env)
                (value-of (if-exp-exp3 exp) env))))
         ((let-exp? exp)
-         (let ((val (value-of (let-exp-exp1 exp) env)))
+         (let ((vals (eval-in-order (let-exp-exps exp) env)))
            (value-of (let-exp-body exp)
-                     (extend-env (let-exp-var exp)
-                                 (newref val)
+                     (extend-env (zip (let-exp-vars exp)
+                                      (map newref vals))
                                  env))))
         ((proc-exp? exp)
-         (make-proc-val (procedure (proc-exp-var exp)
+         (make-proc-val (procedure (proc-exp-vars exp)
                                    (proc-exp-body exp)
                                    env)))
         ((call-exp? exp)
          (let ((proc (expval->proc (value-of (call-exp-rator exp) env)))
-               (arg (value-of (call-exp-rand exp) env)))
-           (apply-procedure proc arg)))
+               (args (eval-in-order (call-exp-rands exp) env)))
+           (apply-procedure proc args)))
         ((letrec-exp? exp)
          (value-of (letrec-exp-letrec-body exp)
                    (extend-env-rec (letrec-exp-p-names exp)
@@ -255,6 +260,19 @@
          the-unspecified-value)
         (else (error 'value-of "invalid expression" exp))))
 
+;; eval-in-order : List-of(Exp) x Env -> List-of(Exp-val)
+;; This is very much like map, but with a specified order of
+;; evaluation.
+(define (eval-in-order exps env)
+  (letrec
+    ((eval-all
+      (lambda (es)
+        (pmatch es
+          (() '())
+          ((,e . ,es*) `(,(value-of e env) . ,(eval-all es*)))))))
+
+    (eval-all exps)))
+
 ;; Parser for a simple S-exp representation.
 ;; parse : List -> Exp
 (define (parse sexp)
@@ -264,15 +282,24 @@
     ((zero? ,s) (make-zero?-exp (parse s)))
     ((if ,t ,c ,a) (make-if-exp (parse t) (parse c) (parse a)))
     (,v (guard (symbol? v)) (make-var-exp v))
-    ((let ,v = ,s in ,b) (guard (symbol? v))
-     (make-let-exp v (parse s) (parse b)))
-    ((proc (,v) ,body) (guard (symbol? v))
-     (make-proc-exp v (parse body)))
+    ((let ,bs in ,body)
+     (let-values (((vars exps) (parse-bindings bs)))
+       (make-let-exp vars exps (parse body))))
+    ((proc ,vs ,body) (guard (for-all symbol? vs))
+     (make-proc-exp vs (parse body)))
     ((letrec ,bs in ,body) (parse-letrec bs body))
     ((set ,v ,ve) (guard (symbol? v))
      (make-assign-exp v (parse ve)))
-    ((,e1 ,e2) (make-call-exp (parse e1) (parse e2)))
+    ((,e . ,ers) (make-call-exp (parse e) (map parse ers)))
     (? (error 'parse "invalid syntax" sexp))))
+
+;; parse-bindings : List -> List-of(Var) x List-of(Exp)
+(define (parse-bindings bs)
+  (pmatch bs
+    (() (values '() '()))
+    (((,var = ,exp) . ,bs*) (guard (symbol? var))
+     (let-values (((vars exps) (parse-bindings bs*)))
+       (values (cons var vars) (cons (parse exp) exps))))))
 
 ;; parse-letrec : List x List -> Exp
 (define (parse-letrec binds body)
@@ -312,11 +339,11 @@
   (test 0 (eval-to-num '(if (zero? 2) 1 0)))
   (test 1 (eval-to-num '(if (zero? 0) 1 0)))
   (test 1 (eval-to-num '(- 3 2)))
-  (test 4 (eval-to-num '(let a = (- v i) in a)))
+  (test 4 (eval-to-num '(let ((a = (- v i))) in a)))
   (test 6 (eval-to-num
-           '(let add1 = (proc (a) (- a (- 0 1))) in (add1 v))))
+           '(let ((add1 = (proc (a) (- a (- 0 1))))) in (add1 v))))
   (test 5 (eval-to-num
-           '(let add1 = (proc (b) (- b (- 0 1))) in
+           '(let ((add1 = (proc (b) (- b (- 0 1))))) in
               (letrec ((f (a) = (if (zero? a) 0 (add1 (f (- a 1))))))
                in (f 5)))))
   (test 0 (eval-to-num
@@ -324,17 +351,18 @@
                      (odd  (k) = (if (zero? k) 0 (even (- k 1)))))
              in (- (even 4) (odd 3)))))
 
-  (test 5 (eval-to-num '(let y = 0 in (let dum = (set y 5) in y))))
+  (test 5 (eval-to-num '(let ((y = 0)) in
+                          (let ((dum = (set y 5))) in y))))
   (test 0 (eval-to-num
-           '(let x = 0 in
+           '(let ((x = 0)) in
               (letrec ((even (dum) = (if (zero? x)
                                          1
-                                         (let dum = (set x (- x 1)) in
-                                           (odd 4))))
+                                         (let ((dum = (set x (- x 1))))
+                                          in (odd 4))))
                        (odd (dum) = (if (zero? x)
                                         0
-                                        (let dum = (set x (- x 1)) in
-                                          (even 4)))))
-               in (let dum = (set x 5) in
+                                        (let ((dum = (set x (- x 1))))
+                                         in (even 4)))))
+               in (let ((dum = (set x 5))) in
                     (even 888))))))
   )
