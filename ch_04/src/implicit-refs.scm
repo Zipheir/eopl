@@ -165,7 +165,7 @@
                             (extended-env-rec-p-names env)) =>
                   (lambda (n)
                     (newref
-                      (make-proc-val (procedure (list-ref b-vars n)
+                      (make-proc-val (procedure b-vars
                                                 (list-ref p-bodies n)
                                                 env)))))
                  (else
@@ -197,10 +197,11 @@
 ;;; Initial environment
 
 ;; init-env : () -> Env
+;; This is side-effecting, due to the newrefs.
 (define (init-env)
-  (alist->env `((i . ,(make-num-val 1))
-                (v . ,(make-num-val 5))
-                (x . ,(make-num-val 10)))))
+  (alist->env `((i . ,(newref (make-num-val 1)))
+                (v . ,(newref (make-num-val 5)))
+                (x . ,(newref (make-num-val 10))))))
 
 ;;;; Programs
 
