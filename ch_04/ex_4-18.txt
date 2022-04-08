@@ -1,0 +1,19 @@
+# Exercise 4.18
+
+This is a little odd, since the basic IMPLICIT-REFS interpreter
+already has multi-procedure letrec.  The specs weren't worked out,
+however, so here they are:
+
+------------------------------------------------ letrec
+ (value-of (letrec-exp (name₁ … nameₙ)
+                       (var₁ … varₙ)
+                       (exp₁ … expₙ)
+                       letrec-body)
+           ρ
+           σ)
+   = (value-of letrec-body
+               (extend-env-rec (name₁ … nameₙ)
+                               (var₁ … varₙ)
+                               (exp₁ … expₙ)
+                               ρ)
+               σ)
