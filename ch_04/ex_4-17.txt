@@ -1,0 +1,46 @@
+# Exercise 4.17
+
+Coming up with the semantics for mult-arg procedures, calls, and lets
+requires some policy about evaluation order.  I don't really have the
+tools to specify an unspecified evaluation order yet, so let's keep
+things simple and require left-to-right evaluation.
+
+I could specify that each RHS expression in a let or call
+context gets the same store, so that effects from one evaluation
+can't affect the others.  This is totally plausible using an implicit
+refs version of the state-transformer implementation from Ex. 4.12,
+but it's very hard to implement efficiently in the traditional
+mutable state interpreter.  A relevant notion is the idea of linear
+and nonlinear types, where the former can't be duplicated.  The Sto
+type is conceptually something like a linear type.
+
+I'll also change the representation of environments to the ribcage
+structure from earlier exercises.
+
+          (value-of exp₁ ρ σ₀)   = (val₁, σ₁)
+                          ⋮
+          (value-of expₙ ρ σₙ₋₁) = (valₙ, σₙ)
+--------------------------------------------------------- let
+ (value-of (let-exp (var₁ … varₙ) (exp₁ … expₙ) body)) =
+   (value-of body
+             [var₁ = l₁, …, varₙ = lₙ]ρ
+             [l₁ = val₁ … lₙ = valₙ]σₙ)
+
+where the ls are all fresh locations.
+
+          (value-of rator ρ σ₀)  = (vrat, σ₁)
+          (value-of exp₁ ρ σ₁)   = (val₁, σ₂)
+                           ⋮
+          (value-of expₙ ρ σₙ₋₁) = (valₙ, σₙ)
+---------------------------------------------------------- call
+ (value-of (call-exp rator (exp₁ … expₙ)) ρ σ₀) =
+   (apply-procedure (expval->proc vrat) (val₁ … valₙ) σₙ)
+
+where apply-procedure is now given by:
+
+  (apply-procedure (procedure (var₁ … varₙ) body ρ) (val₁ … valₙ) σ)
+= (value-of body
+            [var₁ = l₁, …, varₙ = lₙ]ρ
+            [l₁ = val₁ … lₙ = valₙ]σ)
+
+See the implicit-refs-multi branch for the implementation.
