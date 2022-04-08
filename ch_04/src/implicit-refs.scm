@@ -165,9 +165,8 @@
                             (extended-env-rec-p-names env)) =>
                   (lambda (n)
                     (newref
-                      (make-proc-val (procedure b-vars
-                                                (list-ref p-bodies n)
-                                                env)))))
+                     (make-proc-val
+                      (procedure b-vars (list-ref p-bodies n) env)))))
                  (else
                   (apply-env (extended-env-rec-env env) search-var)))))
         (else (error 'apply-env "invalid environment" env))))
