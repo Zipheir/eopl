@@ -42,7 +42,7 @@
   (fields rator rand))
 
 (define-record-type letrec-exp
-  (fields p-name b-var p-body letrec-body))
+  (fields p-names b-vars p-bodies letrec-body))
 
 (define (expression? obj)
   (or (const-exp? obj)
@@ -106,33 +106,59 @@
 (define-record-type (extended-env extend-env extended-env?)
   (fields var val rest-env))
 
-(define (environment? obj)
-  (or (empty-env? obj) (extended-env? obj)))
+;; extend-env-rec : List-of(Var) × List-of(Var) × List-of(Exp) × Env →
+;;                    Env
+;;
+;; Usage: Extends saved-env with a series of recursive environment
+;; frames binding p-names to the appropriate procedures.
+(define (extend-env-rec p-names b-vars p-bodies saved-env)
+  (let* ((env-frag (make-box-env p-names))
+         (new-env (append-env env-frag saved-env)))
+    (for-each (lambda (name var body)
+                (let ((vec (apply-env-no-unbox env-frag name)))
+                  (vector-set! vec
+                               0
+                               (make-proc-val
+                                (procedure var body new-env)))))
+              p-names
+              b-vars
+              p-bodies)
+    new-env))
 
-;; extend-env-rec : Var × Var × Exp × Env → Env
-(define (extend-env-rec p-name b-var body saved-env)
-  (let ((vec (make-vector 1)))   ; mutable box
-    (let ((new-env (extend-env p-name vec saved-env)))
-      (vector-set! vec
-                   0
-                   (make-proc-val (procedure b-var body new-env)))
-      new-env)))
+;; make-box-env : List-of(Var) → Env
+;;
+;; Usage: Builds a new environment in which each name is bound to a
+;; box (a 1-vector) containing an unspecified value.
+(define (make-box-env names)
+  (fold-right (lambda (nm env) (extend-env nm (make-vector 1) env))
+              (empty-env)
+              names))
+
+;; append-env : Env × Env → Env
+(define (append-env env1 env2)
+  (cond ((empty-env? env1) env2)
+        ((extended-env? env1)
+         (extend-env (extended-env-var env1)
+                     (extended-env-val env1)
+                     (append-env (extended-env-rest-env env1) env2)))
+        (else (error 'append-env "invalid environment" env1))))
 
 ;; apply-env : Env × Var → Exp-val
 (define (apply-env env search-var)
-  (cond ((empty-env? env) (report-no-binding-found search-var))
-        ((extended-env? env)
-         (if (eqv? search-var (extended-env-var env))
-             (get-env-val env)
-             (apply-env (extended-env-rest-env env) search-var)))
-        (else (error 'apply-env "invalid environment" env))))
-
-;; get-env-val : Env → Exp-val
-(define (get-env-val env)
-  (let ((val-data (extended-env-val env)))
+  (let ((val-data (apply-env-no-unbox env search-var)))
     (if (vector? val-data)
         (vector-ref val-data 0)
         val-data)))
+
+;; apply-env-no-unbox : Env × Var → Exp-val + Vector
+(define (apply-env-no-unbox env search-var)
+  (cond ((empty-env? env) (report-no-binding-found search-var))
+        ((extended-env? env)
+         (if (eqv? search-var (extended-env-var env))
+             (extended-env-val env)
+             (apply-env-no-unbox (extended-env-rest-env env)
+                                 search-var)))
+        (else (error 'apply-env-no-unbox "invalid environment" env))))
 
 (define (report-no-binding-found var)
   (error 'apply-env "no binding found" var))
@@ -166,8 +192,6 @@
 
 ;; value-of : Exp × Env → Exp-val
 (define (value-of exp env)
-  (assert (expression? exp))
-  (assert (environment? env))
   (cond ((const-exp? exp) (make-num-val (const-exp-num exp)))
         ((var-exp? exp) (apply-env env (var-exp-var exp)))
         ((diff-exp? exp)
@@ -200,9 +224,9 @@
            (apply-procedure proc arg)))
         ((letrec-exp? exp)
          (value-of (letrec-exp-letrec-body exp)
-                   (extend-env-rec (letrec-exp-p-name exp)
-                                   (letrec-exp-b-var exp)
-                                   (letrec-exp-p-body exp)
+                   (extend-env-rec (letrec-exp-p-names exp)
+                                   (letrec-exp-b-vars exp)
+                                   (letrec-exp-p-bodies exp)
                                    env)))
         (else (error 'value-of "invalid expression" exp))))
 
@@ -225,10 +249,25 @@
     ((proc (,v) ,body) (guard (symbol? v))
      (make-proc-exp v (parse body)))
     ((,e1 ,e2) (make-call-exp (parse e1) (parse e2)))
-    ((letrec ,name (,v) = ,p-body in ,body)
-     (guard (symbol? name) (symbol? v))
-     (make-letrec-exp name v (parse p-body) (parse body)))
+    ((letrec ,bs in ,body) (parse-letrec bs body))
     (? (error 'parse "invalid syntax" sexp))))
+
+;; parse-letrec : List x List -> Exp
+(define (parse-letrec binds body)
+  (letrec
+    ((collect
+      (lambda (bs names vars bodies)
+        (pmatch bs
+          (() (values names vars bodies))
+          (((,name (,var) = ,body) . ,bs*)
+           (guard (symbol? name) (symbol? var))
+           (collect bs*
+                    (cons name names)
+                    (cons var vars)
+                    (cons (parse body) bodies)))))))
+
+    (let-values (((names vars bodies) (collect binds '() '() '())))
+      (make-letrec-exp names vars bodies (parse body)))))
 
 ;; parse-program : List → Program
 (define (parse-program sexp)
