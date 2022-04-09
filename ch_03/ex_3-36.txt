@@ -1,0 +1,82 @@
+# Exercise 3.36
+
+This extends the environment representation from the previous
+exercise to handle multi-binding letrecs.
+
+The new expression type is straightforward.
+
+Expression ::= letrec ...   % I don't really care about syntax.
+               [letrec (p-names b-vars p-bodies letrec-body)]
+
+Alternatively, a letrec expression could be represented by (a type
+isomorphic to) a pair of a list of triples and the letrec body
+expression.
+
+As for the semantics and implementation...
+
+I had to come back to this one.  The box really doesn't change the
+representation of a rec environment frame much, but the big question
+is whether a letrec turns into a single frame or several.  The former
+approach requires a lot of reworking, since the current implementation
+uses single-binding frames.  I'd like to try the latter approach
+first and see how things go.
+
+;; extend-env-rec : List-of(Var) × List-of(Var) × List-of(Exp) × Env →
+;;                    Env
+;;
+;; Usage: Extends saved-env with a series of recursive environment
+;; frames binding p-names to the appropriate procedures.
+(define (extend-env-rec p-names b-vars p-bodies saved-env)
+  (let* ((env-frag (make-box-env p-names))
+         (new-env (append-env env-frag saved-env)))
+    (for-each (lambda (name var body)
+                (let ((vec (apply-env-no-unbox env-frag name)))
+                  (vector-set! vec
+                               0
+                               (make-proc-val
+                                (procedure var body new-env)))))
+              p-names
+              b-vars
+              p-bodies)
+    new-env))
+
+
+;; make-box-env : List-of(Var) → Env
+;;
+;; Usage: Builds a new environment in which each name is bound to a
+;; box (a 1-vector) containing an unspecified value.
+(define (make-box-env names)
+  (fold-right (lambda (nm env) (extend-env nm (make-vector 1) env))
+              (empty-env)
+              p-names))
+
+Here, the new environment is first constructed, with each procedure name
+bound to an empty 1-vector.  Then, the boxes are filled in.  This must
+happen in two steps in order to create the desired self-referential
+structure.  Note that it doesn't matter whether the boxes are filled in
+through the (full) new environment or through the fragment created; I
+use the fragment for a little extra hygiene assurance.
+
+apply-env-no-unbox does what it says on the tin; I presume that the
+ordinary apply-env implicitly unboxes any value it retrieves.
+
+append-env is a simple translation of list append to environments.
+
+So this approach works just fine, even if it's not beautiful.  With
+the ribcage environment representation (Ex. 2.11), things are a
+little simpler, but essentially the same:
+
+;; Env = Empty | Extend-env List-of(Var) List-of(Exp-val) Env
+
+(define (extend-env-rec p-names b-vars p-bodies saved-env)
+  (let* ((val-boxes (map (lambda (_) (make-vector 1)) p-names))
+         (new-env (extend-env p-names val-boxes saved-env)))
+    (for-each (lambda (var body vec)
+                (vector-set! vec
+                             0
+                             (make-proc-val
+                              (procedure var body new-env))))
+              b-vars
+              p-bodies
+              val-boxes)
+    new-env))
