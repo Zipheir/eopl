@@ -12,13 +12,33 @@ Expression ::= letmutable Identifier = Expression in Expression
 Immutable variables are introduced by let expressions.
 
 The existing let expressions of IMPLICIT-REFS are exactly the
-letmutable expressions of the new language.  All that's missing,
-then, are the (immutable-binding) let expressions:
+letmutable expressions of the new language.  The new let semantics:
 
      (value-of exp₁ ρ σ₀) = (val₁, σ₁)
 -------------------------------------------
  (value-of (let-exp var exp₁ body) ρ σ₀) =
    (value-of body [var = val₁]ρ σ₁)
 
-Additional checking of denoted values may be in order, since
-they now come in two flavors.
+The evaluation of variable expressions also changes:
+
+(value-of (var-exp var) ρ σ) =
+  (let ((val (apply-env ρ var)))
+    (if (reference? val)
+        (deref val)
+        val))
+
+It's not too much work to implement a static verification step which
+traverses an expression tree and warns of any invalid assignments.
+This is similar to finding the free variables of an expression, except
+that you maintain a set of mutable variables.  This set can shrink as
+well as grow; this happens in the expression
+
+letmutable x = 4
+in let x = 6
+   in set(x, 7)   % invalid!
+
+Here, the mutable set is {x} for the body of the letmutable expression,
+but it's ∅ for the body of the inner let.
+
+It would be good for language simplicity to make letrec introduce
+immutable bindings as well.  This is a very simple change.
