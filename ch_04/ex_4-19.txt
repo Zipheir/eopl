@@ -1,0 +1,18 @@
+# Exercise 4.19
+
+This adapts the IMPLICIT-REFS interpreter to use the Ex. 3.35/3.36
+"box trick" for constructing rec environments.
+
+The only real difference between the situations here and in Ex. 3.36
+is that locations have to be allocated for the procedure values.  I
+can use the 3.36 implementation of extend-env-rec, except that the
+value put in the box is now a location:
+
+(vector-set! vec
+             0
+             (newref
+              (make-proc-val
+               (procedure var body new-env))))
+
+I'll also need to unbox values retrieved from environments, but that's
+straightforward.
