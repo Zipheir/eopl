@@ -1,4 +1,5 @@
-;;;; IMPLICIT-REFS language from Ch. 4.
+;;;; IMPLICIT-REFS language from Ch. 4, extended with immutable and
+;;;; mutable bindings per Ex. 4.20.
 
 (import (rnrs lists (6))
         (rnrs records syntactic (6)))
@@ -63,6 +64,9 @@
   (fields var))
 
 (define-record-type let-exp
+  (fields var exp1 body))
+
+(define-record-type letmut-exp
   (fields var exp1 body))
 
 (define-record-type proc-exp
@@ -212,7 +216,9 @@
 ;; value-of : Exp x Env -> Exp-val
 (define (value-of exp env)
   (cond ((const-exp? exp) (make-num-val (const-exp-num exp)))
-        ((var-exp? exp) (deref (apply-env env (var-exp-var exp))))
+        ((var-exp? exp)
+         (let ((v (apply-env env (var-exp-var exp))))
+           (if (reference? v) (deref v) v)))
         ((diff-exp? exp)
          (let ((val1 (value-of (diff-exp-exp1 exp) env))
                (val2 (value-of (diff-exp-exp2 exp) env)))
@@ -232,7 +238,11 @@
         ((let-exp? exp)
          (let ((val (value-of (let-exp-exp1 exp) env)))
            (value-of (let-exp-body exp)
-                     (extend-env (let-exp-var exp)
+                     (extend-env (let-exp-var exp) val env))))
+        ((letmut-exp? exp)
+         (let ((val (value-of (letmut-exp-exp1 exp) env)))
+           (value-of (letmut-exp-body exp)
+                     (extend-env (letmut-exp-var exp)
                                  (newref val)
                                  env))))
         ((proc-exp? exp)
@@ -250,10 +260,19 @@
                                    (letrec-exp-p-bodies exp)
                                    env)))
         ((assign-exp? exp)
-         (setref! (apply-env env (assign-exp-var exp))
-                  (value-of (assign-exp-exp1 exp) env))
-         the-unspecified-value)
+         (let* ((var (assign-exp-var exp))
+                (l (apply-env env var)))
+           (if (reference? l)
+               (setref! l (value-of (assign-exp-exp1 exp) env))
+               (report-assignment-to-immutable-var var))
+           the-unspecified-value))
         (else (error 'value-of "invalid expression" exp))))
+
+;; report-assignment-to-immutable-var : Var -> ()
+(define (report-assignment-to-immutable-var var)
+  (error 'value-of
+         "assignment to immutable variable"
+         var))
 
 ;; Parser for a simple S-exp representation.
 ;; parse : List -> Exp
@@ -266,6 +285,8 @@
     (,v (guard (symbol? v)) (make-var-exp v))
     ((let ,v = ,s in ,b) (guard (symbol? v))
      (make-let-exp v (parse s) (parse b)))
+    ((letmutable ,v = ,s in ,b) (guard (symbol? v))
+     (make-letmut-exp v (parse s) (parse b)))
     ((proc (,v) ,body) (guard (symbol? v))
      (make-proc-exp v (parse body)))
     ((letrec ,bs in ,body) (parse-letrec bs body))
@@ -324,9 +345,10 @@
                      (odd  (k) = (if (zero? k) 0 (even (- k 1)))))
              in (- (even 4) (odd 3)))))
 
-  (test 5 (eval-to-num '(let y = 0 in (let dum = (set y 5) in y))))
+  (test 5 (eval-to-num '(letmutable y = 0 in
+                          (let dum = (set y 5) in y))))
   (test 0 (eval-to-num
-           '(let x = 0 in
+           '(letmutable x = 0 in
               (letrec ((even (dum) = (if (zero? x)
                                          1
                                          (let dum = (set x (- x 1)) in
