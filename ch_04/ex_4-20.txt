@@ -1,0 +1,24 @@
+# Exercise 4.20
+
+Mutable and immutable variables:
+
+Exp-val = Int + Bool + Proc
+Den-val = Ref(Exp-val) + Exp-val
+
+New syntax:
+
+Expression ::= letmutable Identifier = Expression in Expression
+
+Immutable variables are introduced by let expressions.
+
+The existing let expressions of IMPLICIT-REFS are exactly the
+letmutable expressions of the new language.  All that's missing,
+then, are the (immutable-binding) let expressions:
+
+     (value-of exp₁ ρ σ₀) = (val₁, σ₁)
+-------------------------------------------
+ (value-of (let-exp var exp₁ body) ρ σ₀) =
+   (value-of body [var = val₁]ρ σ₁)
+
+Additional checking of denoted values may be in order, since
+they now come in two flavors.
