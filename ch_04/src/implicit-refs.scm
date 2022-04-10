@@ -128,6 +128,18 @@
                         (newref val)
                         (proc-saved-env proc1))))
 
+;;;; Boxes
+
+(define (make-box) (vector 'uninitialized))
+
+(define box? vector?)
+
+(define box vector)
+
+(define (unbox b) (vector-ref b 0))
+
+(define (set-box! b val) (vector-set! b 0 val))
+
 ;;;; Environments
 
 (define-record-type (empty-environment empty-env empty-env?))
@@ -135,48 +147,51 @@
 (define-record-type (extended-env extend-env extended-env?)
   (fields var val rest-env))
 
-(define-record-type (extended-env-rec extend-env-rec extended-env-rec?)
-  (fields p-names b-vars p-bodies env))
-
 (define (environment? obj)
   (or (empty-env? obj)
-      (extended-env? obj)
-      (extended-env-rec? obj)))
+      (extended-env? obj)))
 
-;; apply-env : Env x Var -> Scheme-val
-(define (apply-env env search-var)
+;; apply-env-no-unbox : Env x Var -> Scheme-val
+(define (apply-env-no-unbox env search-var)
   (cond ((empty-env? env) (report-no-binding-found search-var))
         ((extended-env? env)
          (if (eqv? search-var (extended-env-var env))
              (extended-env-val env)
-             (apply-env (extended-env-rest-env env) search-var)))
-        ((extended-env-rec? env)
-         (let ((b-vars (extended-env-rec-b-vars env))
-               (p-bodies (extended-env-rec-p-bodies env)))
-           (cond ((location search-var
-                            (extended-env-rec-p-names env)) =>
-                  (lambda (n)
-                    (newref
-                      (make-proc-val (procedure (list-ref b-vars n)
-                                                (list-ref p-bodies n)
-                                                env)))))
-                 (else
-                  (apply-env (extended-env-rec-env env) search-var)))))
+             (apply-env-no-unbox (extended-env-rest-env env)
+                                 search-var)))
         (else (error 'apply-env "invalid environment" env))))
 
-;; location : Var x List-of(Var) -> Nat + False
-(define (location var vs)
-  (letrec
-    ((index-of
-      (lambda (vs k)
-        (pmatch vs
-          (() #f)
-          ((,v . ,vs*)
-           (if (eqv? v var)
-               k
-               (index-of vs* (+ k 1))))))))
+;; apply-env : Env x Var -> Scheme-val
+(define (apply-env env search-var)
+  (let ((x (apply-env-no-unbox env search-var)))
+    (if (box? x)
+        (unbox x)
+        x)))
 
-    (index-of vs 0)))
+;; extend-env/boxes : List-of(Var) -> Env
+;; Usage: Extends env with a series of frames binding each name (in
+;; order) to a fresh box.
+(define (extend-env/boxes names env)
+  (fold-right (lambda (nm e) (extend-env nm (make-box) e))
+              env
+              names))
+
+;; extend-env-rec : List-of(Var) x List-of(Var) x List-of(Exp) x Env
+;;                    -> Env
+;; Usage: Extends env with a series of recursive environment frames
+;; binding p-names to procedures constructed from b-vars and p-bodies.
+(define (extend-env-rec p-names b-vars p-bodies env)
+  (let ((new-env (extend-env/boxes p-names env)))
+    (for-each (lambda (name var body)
+                (let ((b (apply-env-no-unbox new-env name))
+                      (ref (newref
+                            (make-proc-val
+                             (procedure var body new-env)))))
+                  (set-box! b ref)))
+              p-names
+              b-vars
+              p-bodies)
+    new-env))
 
 (define (report-no-binding-found var)
   (error 'apply-env "no binding found" var))
