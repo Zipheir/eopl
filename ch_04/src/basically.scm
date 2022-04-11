@@ -213,6 +213,11 @@
        (result-of body (extend-env-all vars refs env))))
     ((begin-stmt ,stmts)
      (for-each (lambda (st) (result-of st env)) stmts))
+    ((read-stmt ,var)
+     (let ((x (read)))
+       (if (integer? x)
+           (setref! (apply-env env var) (make-num-val x))
+           (error 'result-of "invalid input value" x))))
     (? (error 'result-of "invalid statement" stmt))))
 
 ;; result-of-program : Prog -> ()
@@ -250,6 +255,7 @@
     ((var ,vs : ,body) (guard (for-all symbol? vs))
      `(block-stmt ,vs ,(parse body)))
     ((begin . ,sts) `(begin-stmt ,(map parse sts)))
+    ((read ,v) (guard (symbol? v)) `(read-stmt ,v))
     (? (error 'parse "invalid statement syntax" sexp))))
 
 ;; parse-program : List -> Program
