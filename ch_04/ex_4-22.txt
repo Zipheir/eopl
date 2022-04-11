@@ -27,7 +27,6 @@ Expression ::= Integer                      % const-exp
            ::= Identifier                   % var-exp
            ::= zero?(Expression)            % zero?-exp
            ::= -(Expression, Expression)    % diff-exp
-           ::= proc (Identifier) Statement  % proc-exp
 
 The Statements of this language do not evaluate to anything, but
 instead act on a store and perhaps have side-effects like printing.
@@ -36,11 +35,13 @@ The text does suggest that Expressions refer to the Expressions of
 IMPLICIT-REFS, but I think it would be very confusing to allow all
 of those--it would be a whole sublanguage.  I'm going as far as to
 say that expressions never have side-effects, which makes the
-language a lot nicer; the cost of this, of course, is that some
-very useful expressions (procedure calls, in particular) are
-disallowed.
+language a lot nicer.  Later, when procedures and calls are added,
+this restriction will be nastier.
 
-Exp-val = Int + Bool + Proc
+I'm also going to add a negation expression; zero? expressions are
+pretty useless as while-controls without it.
+
+Exp-val = Int + Bool
 Den-val = Ref(Exp-val)
 
 The denotational-style semantics used so far are a little awkward
