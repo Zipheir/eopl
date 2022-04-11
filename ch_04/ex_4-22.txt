@@ -27,6 +27,8 @@ Expression ::= Integer                      % const-exp
            ::= Identifier                   % var-exp
            ::= zero?(Expression)            % zero?-exp
            ::= -(Expression, Expression)    % diff-exp
+           ::= func (Identifier) Expression % func-exp
+           ::= (Expression Expression)      % call-exp
 
 The Statements of this language do not evaluate to anything, but
 instead act on a store and perhaps have side-effects like printing.
@@ -35,8 +37,8 @@ The text does suggest that Expressions refer to the Expressions of
 IMPLICIT-REFS, but I think it would be very confusing to allow all
 of those--it would be a whole sublanguage.  I'm going as far as to
 say that expressions never have side-effects, which makes the
-language a lot nicer.  Later, when procedures and calls are added,
-this restriction will be nastier.
+language a lot nicer.  The procedures are limited to functions which
+compute some expression.
 
 I'm also going to add a negation expression; zero? expressions are
 pretty useless as while-controls without it.
