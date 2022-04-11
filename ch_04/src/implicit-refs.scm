@@ -77,6 +77,9 @@
 (define-record-type assign-exp
   (fields var exp1))
 
+(define-record-type setdynamic-exp
+  (fields var exp1 body))
+
 ;;;; Expressed values
 
 (define-record-type num-val
@@ -253,6 +256,14 @@
          (setref! (apply-env env (assign-exp-var exp))
                   (value-of (assign-exp-exp1 exp) env))
          the-unspecified-value)
+        ((setdynamic-exp? exp)
+         (let* ((var    (setdynamic-exp-var exp))
+                (ref    (apply-env env var))
+                (oldval (deref ref)))
+           (setref! ref (value-of (setdynamic-exp-exp1 exp) env))
+           (let ((body-val (value-of (setdynamic-exp-body exp) env)))
+             (setref! ref oldval)
+             body-val)))
         (else (error 'value-of "invalid expression" exp))))
 
 ;; Parser for a simple S-exp representation.
@@ -271,6 +282,8 @@
     ((letrec ,bs in ,body) (parse-letrec bs body))
     ((set ,v ,ve) (guard (symbol? v))
      (make-assign-exp v (parse ve)))
+    ((setdynamic ,v := ,e during ,b) (guard (symbol? v))
+     (make-setdynamic-exp v (parse e) (parse b)))
     ((,e1 ,e2) (make-call-exp (parse e1) (parse e2)))
     (? (error 'parse "invalid syntax" sexp))))
 
@@ -337,4 +350,9 @@
                                           (even 4)))))
                in (let dum = (set x 5) in
                     (even 888))))))
+
+  (test 3 (eval-to-num '(let x = 11 in
+                          (let p = (proc (y) (- y x)) in
+                            (- (setdynamic x := 17 during (p 22))
+                               (p 13))))))
   )
