@@ -45,32 +45,6 @@
                                         (- ref1 1))))))))
     (set! the-store (setref-inner the-store ref))))
 
-;;;; Expressions
-
-;;;; Experiment: Uses tagged lists instead of records for brevity.
-
-(define (const-exp num) (list 'const-exp num))
-
-(define (diff-exp exp1 exp2) (list 'diff-exp exp1 exp2))
-
-(define (zero?-exp exp1) (list 'zero?-exp exp1))
-
-(define (var-exp var) (list 'var-exp var))
-
-;;;; Statements
-
-(define (assign-stmt var exp1) (list 'assign-stmt var exp1))
-
-(define (print-stmt exp1) (list 'print-stmt exp1))
-
-(define (if-stmt test con alt) (list 'if-stmt test con alt))
-
-(define (while-stmt test body) (list 'while-stmt test body))
-
-(define (block-stmt vars body) (list 'block-stmt vars body))
-
-(define (begin-stmt stmts) (list 'begin-stmt stmts))
-
 ;;;; Expressed values
 
 (define-record-type num-val
