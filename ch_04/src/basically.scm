@@ -53,6 +53,9 @@
 (define-record-type bool-val
   (fields bool))
 
+(define-record-type func-val
+  (fields func))
+
 ;; expval->num : Exp-val -> Int
 (define (expval->num val)
   (if (num-val? val)
@@ -64,6 +67,12 @@
   (if (bool-val? val)
       (bool-val-bool val)
       (report-expval-extractor-error 'bool val)))
+
+;; expval->func : Exp-val -> Proc
+(define (expval->func val)
+  (if (func-val? val)
+      (func-val-func val)
+      (report-expval-extractor-error 'func val)))
 
 (define (report-expval-extractor-error variant value)
   (error 'expval-extractors
@@ -82,6 +91,18 @@
     (cond ((num-val? val) (show (num-val-num val)))
           ((bool-val? val) (show (bool-val-bool val)))
           (else (error 'print-exp-val "unknown value type" val)))))
+
+;;;; Functions
+
+(define-record-type func
+  (fields var body saved-env))
+
+;; apply-function : Func x Exp-val -> Exp-val
+(define (apply-function func1 val)
+  (value-of (func-body func1)
+            (extend-env (func-var func1)
+                        (newref val)
+                        (func-saved-env func1))))
 
 ;;;; Environments
 
@@ -161,8 +182,12 @@
        (if (zero? (expval->num val))
            (make-bool-val #t)
            (make-bool-val #f))))
-    ((proc-exp ,var ,body)
-     (make-proc-val (procedure var body env)))
+    ((func-exp ,var ,body)
+     (make-func-val (make-func var body env)))
+    ((call-exp ,rator ,rand)
+     (let ((func1 (expval->func (value-of rator env)))
+           (rval (value-of rand env)))
+       (apply-function func1 rval)))
     (? (error 'value-of "invalid expression" exp))))
 
 ;;;; Interpreter for statements
@@ -206,6 +231,9 @@
     ((zero? ,s) `(zero?-exp ,(exp-parse s)))
     (,v (guard (symbol? v)) `(var-exp ,v))
     ((! ,e) `(not-exp ,(exp-parse e)))
+    ((func (,v) ,body) (guard (symbol? v))
+     `(func-exp ,v ,(exp-parse body)))
+    ((,f ,a) `(call-exp ,(exp-parse f) ,(exp-parse a)))
     (? (error 'exp-parse "invalid expression syntax" sexp))))
 
 ;; parse : List -> Stmt
