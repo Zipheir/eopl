@@ -36,8 +36,9 @@ The text does suggest that Expressions refer to the Expressions of
 IMPLICIT-REFS, but I think it would be very confusing to allow all
 of those--it would be a whole sublanguage.  I'm going as far as to
 say that expressions never have side-effects, which makes the
-language a lot nicer (than the alternative, and than most existing
-imperative languages!).
+language a lot nicer; the cost of this, of course, is that some
+very useful expressions (procedure calls, in particular) are
+disallowed.
 
 Exp-val = Int + Bool + Proc
 Den-val = Ref(Exp-val)
