@@ -1,0 +1,14 @@
+# Exercise 4.23
+
+Read statements for the Ex. 4.22 language (BASICALLY).
+
+Statement ::= read Identifier
+              [read-stmt var]
+
+The semantics hide some details, obviously:
+
+                    (I/O) = val₁
+----------------------------------------------------
+ (result-of (read-stmt var) ρ σ) = [ρ(var) = val₁]σ
+
+See the basically-ext branch for an implementation.
