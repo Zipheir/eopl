@@ -1,0 +1,101 @@
+# Exercise 4.22
+
+Now for a legitimately new language.  The grammar:
+
+Program   ::= Statement
+              [program (stmt)]
+
+Statement ::= Identifier := Expression
+              [assign-stmt (var exp₁)]
+
+          ::= print Expression
+              [print-stmt (exp₁)]
+
+          ::= if Expression Statement Statement
+              [if-stmt (test con alt)]
+
+          ::= while Expression Statement
+              [while-stmt (test body)]
+
+          ::= var {Identifier}*(,) ; Statement
+              [block-stmt (vars body)]
+
+          ::= { {Statement}*(;) }
+              [begin-stmt (stmts)]
+
+Expression ::= Integer                      % const-exp
+           ::= Identifier                   % var-exp
+           ::= zero?(Expression)            % zero?-exp
+           ::= -(Expression, Expression)    % diff-exp
+           ::= proc (Identifier) Statement  % proc-exp
+
+The Statements of this language do not evaluate to anything, but
+instead act on a store and perhaps have side-effects like printing.
+
+The text does suggest that Expressions refer to the Expressions of
+IMPLICIT-REFS, but I think it would be very confusing to allow all
+of those--it would be a whole sublanguage.  I'm going as far as to
+say that expressions never have side-effects, which makes the
+language a lot nicer (than the alternative, and than most existing
+imperative languages!).
+
+Exp-val = Int + Bool + Proc
+Den-val = Ref(Exp-val)
+
+The denotational-style semantics used so far are a little awkward
+here, but that's what I've got.  Here are the types of the main
+functions:
+
+result-of : Stmt × Env × Sto → Sto      % main interpreter
+value-of  : Exp × Env × Sto  → Exp-val  % expression evaluator
+
+Note that value-of takes a store but does not transform it.
+
+                 (value-of exp₁ ρ σ) = val₁
+-----------------------------------------------------------
+ (result-of (assign-stmt var exp₁) ρ σ) = [ρ(var) = val₁]σ
+
+
+      (value-of exp₁ ρ σ) = val₁
+---------------------------------------
+ (result-of (print-stmt exp₁) ρ σ) = σ
+
+
+      (value-of test ρ σ) = val₁
+------------------------------------------
+ (result-of (if-stmt test con alt) ρ σ) =
+   (if ⌊val₁⌋
+       (result-of con ρ σ)
+       (result-of alt ρ σ))
+
+
+                    (value-of test ρ σ) = val₁
+-----------------------------------------------------------------
+ (result-of (while-stmt test body) ρ σ) =
+   (if ⌊val₁⌋
+       (result-of (while-stmt test body) ρ (result-of body ρ σ))
+       σ)
+
+
+                 (l₁ … lₙ) ∉ dom(σ)
+---------------------------------------------------
+ (result-of (block-stmt (var₁ … varₙ) body) ρ σ) =
+   (result-of body
+              [var₁ = l₁, …, varₙ = lₙ]ρ
+              [l₁ = ⊥, …, lₙ = ⊥]σ)
+
+
+            (result-of stmt₁ ρ σ₀)   = σ₁
+                         ⋮
+            (result-of stmtₙ ρ σₙ₋₁) = σₙ
+----------------------------------------------------
+ (result-of (begin-stmt (stmt₁ … stmtₙ)) ρ σ₀) = σₙ
+
+
+Of course, the rule for the print statement is bogus.  Note also that
+the while-statement rule isn't valid in denotational semantics, since
+it's not compositional.  Hence, there's no guarantee that a while
+statement will terminate.
+
+I'm going to call this language BASICALLY.  See src/basically.scm
+for an implementation.
