@@ -149,6 +149,9 @@
   (pmatch exp
     ((const-exp ,num) (make-num-val num))
     ((var-exp ,var) (deref (apply-env env var)))
+    ((not-exp ,exp1)
+     (let ((val (value-of exp1 env)))
+       (make-bool-val (not (expval->bool val)))))
     ((diff-exp ,exp1 ,exp2)
      (let ((num1 (expval->num (value-of exp1 env)))
            (num2 (expval->num (value-of exp2 env))))
@@ -202,6 +205,7 @@
     ((- ,s ,t) `(diff-exp ,(exp-parse s) ,(exp-parse t)))
     ((zero? ,s) `(zero?-exp ,(exp-parse s)))
     (,v (guard (symbol? v)) `(var-exp ,v))
+    ((! ,e) `(not-exp ,(exp-parse e)))
     (? (error 'exp-parse "invalid expression syntax" sexp))))
 
 ;; parse : List -> Stmt
