@@ -1,0 +1,37 @@
+# Exercise 4.21
+
+This adds "dynamic assignment" to the language.  These are a little
+like the parameter objects of Scheme.
+
+Expression ::= setdynamic Identifier := Expression during Expression
+               [setdynamic-exp (var exp₁ body)]
+
+The name temporarily bound by setdynamic must already be bound; it
+is bound to the value of ⟨exp₁⟩ for the evaluation of ⟨body⟩, then
+restored to its original binding when control leaves the setdynamic
+expression.  So
+
+let x = 11
+in let p = proc (y) -(y, x)
+   in -(setdynamic x := 17 during (p 22), (p 13))
+
+should be equivalent to
+
+let x = 11
+in let p = proc (y) -(y, x)
+   in -(begin set x := 17;
+              let v = (p 22)
+              in begin set x := 11; v,
+        (p 13))
+
+The semantics look like a variation on those for assignment:
+
+        (value-of exp₁ ρ σ₀) = (val₁, σ₁)
+--------------------------------------------------
+ (value-of (setdynamic-exp var exp₁ body) ρ σ₀) =
+    (value-of body ρ [ρ(var) = val₁]σ₁)
+
+With the actually-mutable store of the implementation, this looks
+much more dynamic-windy: first the old value of ⟨var⟩ is saved, then
+the new value is assigned, etc., with the old value being restored
+right before the final value is returned.
