@@ -7,8 +7,8 @@ Statement ::= read Identifier
 
 The semantics hide some details, obviously:
 
-                    (I/O) = val₁
+                 (I/O) = n ∈ ℕ
 ----------------------------------------------------
- (result-of (read-stmt var) ρ σ) = [ρ(var) = val₁]σ
+ (result-of (read-stmt var) ρ σ) = [ρ(var) = ⌈n⌉]σ
 
 See the basically-ext branch for an implementation.
