@@ -1,0 +1,16 @@
+# Exercise 4.24
+
+This adds a do-while form to BASICALLY.
+
+Expression ::= do Statement while Expression
+               [do-while-exp body test]
+
+This form is very awkward to specify in something like a denotational
+style (and, like while, its spec. isn't compositional), so here's an
+interpreter fragment:
+
+(result-of (do-while-exp body test) env) =
+  (let loop ()
+    (result-of body env)
+    (when (expval->bool (value-of test env))
+      (loop)))
