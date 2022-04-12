@@ -208,8 +208,9 @@
      (let loop ()
        (when (expval->bool (value-of test env))
          (begin (result-of body env) (loop)))))
-    ((block-stmt ,vars ,body)
-     (let ((refs (map (lambda (_) (newref 'uninitialized)) vars)))
+    ((block-stmt ,vars ,exps ,body)
+     (let* ((vals (map (lambda (e) (value-of e env)) exps))
+            (refs (map (lambda (v) (newref v)) vals)))
        (result-of body (extend-env-all vars refs env))))
     ((begin-stmt ,stmts)
      (for-each (lambda (st) (result-of st env)) stmts))
@@ -257,13 +258,26 @@
      `(if-stmt ,(exp-parse test) ,(parse con) ,(parse alt)))
     ((while ,test ,body)
      `(while-stmt ,(exp-parse test) ,(parse body)))
-    ((var ,vs : ,body) (guard (for-all symbol? vs))
-     `(block-stmt ,vs ,(parse body)))
+    ((var ,inits : ,body) (parse-block inits body))
     ((begin . ,sts) `(begin-stmt ,(map parse sts)))
     ((read ,v) (guard (symbol? v)) `(read-stmt ,v))
     ((do ,body while ,test)
      `(do-while-exp ,(parse body) ,(exp-parse test)))
     (? (error 'parse "invalid statement syntax" sexp))))
+
+;; parse-block : List -> Stmt
+(define (parse-block inits body)
+  (letrec
+    ((collect  ; in reverse order
+      (lambda (ins vars exps)
+        (pmatch ins
+          (() (values vars exps))
+          (((,v = ,e) . ,ins*) (guard (symbol? v))
+           (collect ins* (cons v vars) (cons (exp-parse e) exps)))
+          (? (error 'parse "invalid block statement syntax" ins))))))
+
+    (let-values (((vars exps) (collect inits '() '())))
+      (list 'block-stmt vars exps (parse body)))))
 
 ;; parse-program : List -> Program
 (define (parse-program sexp)
