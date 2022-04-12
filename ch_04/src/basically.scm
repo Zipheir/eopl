@@ -218,6 +218,11 @@
        (if (integer? x)
            (setref! (apply-env env var) (make-num-val x))
            (error 'result-of "invalid input value" x))))
+    ((do-while-exp ,body ,test)
+     (let loop ()
+       (result-of body env)
+       (when (expval->bool (value-of test env))
+         (loop))))
     (? (error 'result-of "invalid statement" stmt))))
 
 ;; result-of-program : Prog -> ()
@@ -256,6 +261,8 @@
      `(block-stmt ,vs ,(parse body)))
     ((begin . ,sts) `(begin-stmt ,(map parse sts)))
     ((read ,v) (guard (symbol? v)) `(read-stmt ,v))
+    ((do ,body while ,test)
+     `(do-while-exp ,(parse body) ,(exp-parse test)))
     (? (error 'parse "invalid statement syntax" sexp))))
 
 ;; parse-program : List -> Program
