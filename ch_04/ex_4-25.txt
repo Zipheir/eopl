@@ -1,0 +1,21 @@
+# Exercise 4.25
+
+This extends the block form of BASICALLY (ex. 4.22) to handle variable
+initialization.
+
+Statement ::= var ({Identifier = Expression}*(,)) : Statement
+              [block-stmt (vars exps body)]
+
+I'm taking the approach that the evaluation of initializing expressions
+all take place in the same environment.  Since expressions in my
+version do not include side effects, the nastier problem of
+initialization order is avoided.  The semantics:
+
+(value-of exp₁ ρ σ) = val₁
+           ⋮
+(value-of expₙ ρ σ) = valₙ                     (l₁ … lₙ) ∉ dom(σ)
+-----------------------------------------------------------------
+ (result-of (block-stmt (var₁ … varₙ) (exp₁ … expₙ) body) ρ σ) =
+   (result-of body
+              [var₁ = l₁, …, varₙ = lₙ]ρ
+              [l₁ = val₁, …, lₙ = valₙ]σ)
