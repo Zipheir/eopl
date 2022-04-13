@@ -257,3 +257,48 @@ On the other hand, IMPLICIT-REFS makes things *much* simpler by dispensing
 with reference values, which makes confusing (if powerful) techniques
 like reference chaining impossible.  Still, in this language every
 variable is mutable.
+
+## 4.4 MUTABLE-PAIRS
+
+This language extends IMPLICIT-REFS.  The underlying operations:
+
+newpair  : Exp-val × Exp-val → Mut-pair
+left     : Mut-pair → Exp-val
+right    : Mut-pair → Exp-val
+setleft  : Mut-pair × Exp-val → Unspecified
+setright : Mut-pair × Exp-val → Unspecified
+
+Domain equations:
+
+Exp-val  = Int + Bool + Proc + Mut-pair
+Den-val  = Ref(Exp-val)
+Mut-pair = Ref(Exp-val) × Ref(Exp-val)
+
+This basically says it all.  Mut-pairs are easily represented by a
+record or, indeed, a cons-pair of references.
+
+### 4.4.2 Another representation of mutable pairs
+
+Since pairs consist of two independently-assignable locations that
+are allocated together, it is possible to refer to a pair through a
+reference to one of the two locations.  The trick is to ensure that,
+given the left location, say, we can reliably get the right.
+
+Yes, this involves pointer arithmetic:
+
+(define (mutpair? x) (reference? x))
+
+(define (make-pair val1 val2)
+  (let* ((ref1 (newref val1))
+         (ref2 (newref val2)))
+    ref1))
+
+(define (left p) (deref p))
+
+(define (right p) (deref (+ 1 p)))
+
+Obviously, this is type-punning on Refs, and rather a glaring
+abstraction leak.  It creates a Ref without using the newref
+constructor, and, in general, adding integers and references will
+not produce a valid reference unless the length of each object's
+representation in memory is known.
