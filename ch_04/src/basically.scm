@@ -125,20 +125,6 @@
          (apply-env rest-env search-var)))
     (? (error 'apply-env "invalid environment" env))))
 
-;; location : Var x List-of(Var) -> Nat + False
-(define (location var vs)
-  (letrec
-    ((index-of
-      (lambda (vs k)
-        (pmatch vs
-          (() #f)
-          ((,v . ,vs*)
-           (if (eqv? v var)
-               k
-               (index-of vs* (+ k 1))))))))
-
-    (index-of vs 0)))
-
 (define (report-no-binding-found var)
   (error 'apply-env "no binding found" var))
 
