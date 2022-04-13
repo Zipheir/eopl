@@ -1,6 +1,7 @@
 ;;;; BASICALLY language from Ex. 4.22
 
 (import (rnrs lists (6))
+        ; (srfi srfi-11)  ; guile--why? let-values is R6.
         (rnrs records syntactic (6)))
 
 (include "pmatch.scm")
@@ -45,6 +46,12 @@
                                         (- ref1 1))))))))
     (set! the-store (setref-inner the-store ref))))
 
+(define (report-invalid-reference ref store)
+  (error 'report-invalid-reference
+         "invalid reference"
+         ref
+         store))
+
 ;;;; Expressed values
 
 (define-record-type num-val
@@ -55,6 +62,9 @@
 
 (define-record-type func-val
   (fields func))
+
+(define-record-type sub-val
+  (fields sub))
 
 ;; expval->num : Exp-val -> Int
 (define (expval->num val)
@@ -73,6 +83,12 @@
   (if (func-val? val)
       (func-val-func val)
       (report-expval-extractor-error 'func val)))
+
+;; expval->sub : Exp-val -> Sub
+(define (expval->sub val)
+  (if (sub-val? val)
+      (sub-val-sub val)
+      (report-expval-extractor-error 'sub val)))
 
 (define (report-expval-extractor-error variant value)
   (error 'expval-extractors
@@ -103,6 +119,18 @@
             (extend-env (func-var func1)
                         (newref val)
                         (func-saved-env func1))))
+
+;;;; Subroutines
+
+(define-record-type sub
+  (fields var body saved-env))
+
+;; exec-subroutine : Sub x Exp-val -> ()
+(define (exec-subroutine sub1 val)
+  (result-of (sub-body sub1)
+	     (extend-env (sub-var sub1)
+			 (newref val)
+		         (sub-saved-env sub1))))
 
 ;;;; Environments
 
@@ -170,6 +198,8 @@
            (make-bool-val #f))))
     ((func-exp ,var ,body)
      (make-func-val (make-func var body env)))
+    ((sub-exp ,var ,body)
+     (make-sub-val (make-sub var body env)))
     ((call-exp ,rator ,rand)
      (let ((func1 (expval->func (value-of rator env)))
            (rval (value-of rand env)))
@@ -210,6 +240,10 @@
        (result-of body env)
        (when (expval->bool (value-of test env))
          (loop))))
+    ((call-stmt ,rator ,rand)
+     (let ((sub1 (expval->sub (value-of rator env)))
+           (rval (value-of rand env)))
+       (exec-subroutine sub1 rval)))
     (? (error 'result-of "invalid statement" stmt))))
 
 ;; result-of-program : Prog -> ()
@@ -230,6 +264,8 @@
     ((! ,e) `(not-exp ,(exp-parse e)))
     ((func (,v) ,body) (guard (symbol? v))
      `(func-exp ,v ,(exp-parse body)))
+    ((sub (,v) ,body) (guard (symbol? v))
+     `(sub-exp ,v ,(parse body)))
     ((,f ,a) `(call-exp ,(exp-parse f) ,(exp-parse a)))
     (? (error 'exp-parse "invalid expression syntax" sexp))))
 
@@ -249,6 +285,7 @@
     ((read ,v) (guard (symbol? v)) `(read-stmt ,v))
     ((do ,body while ,test)
      `(do-while-exp ,(parse body) ,(exp-parse test)))
+    ((,s ,a) `(call-stmt ,(exp-parse s) ,(exp-parse a)))
     (? (error 'parse "invalid statement syntax" sexp))))
 
 ;; parse-block : List -> Stmt
