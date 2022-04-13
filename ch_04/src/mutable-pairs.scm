@@ -319,7 +319,7 @@
          (let ((val1 (value-of (left-exp-exp1 exp) env)))
            (left (expval->mutpair val1))))
         ((right-exp? exp)
-         (let ((val1 (value-of (left-exp-exp1 exp) env)))
+         (let ((val1 (value-of (right-exp-exp1 exp) env)))
            (right (expval->mutpair val1))))
         ((setleft-exp? exp)
          (let ((val1 (value-of (setleft-exp-exp1 exp) env))
