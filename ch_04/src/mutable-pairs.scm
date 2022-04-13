@@ -81,6 +81,8 @@
 (define-record-type assign-exp
   (fields var exp1))
 
+(define-record-type empty-list-exp)
+
 (define-record-type newpair-exp
   (fields exp1 exp2))
 
@@ -106,6 +108,8 @@
 
 (define-record-type proc-val
   (fields proc))
+
+(define-record-type empty-list-val)
 
 (define-record-type mutpair-val
   (fields pair))
@@ -306,6 +310,7 @@
          (setref! (apply-env env (assign-exp-var exp))
                   (value-of (assign-exp-exp1 exp) env))
          the-unspecified-value)
+        ((empty-list-exp? exp) (make-empty-list-val))
         ((newpair-exp? exp)
          (let ((val1 (value-of (newpair-exp-exp1 exp) env))
                (val2 (value-of (newpair-exp-exp2 exp) env)))
@@ -334,6 +339,7 @@
 ;; parse : List -> Exp
 (define (parse sexp)
   (pmatch sexp
+    (emptylist (make-empty-list-exp))
     (,n (guard (number? n)) (make-const-exp n))
     ((- ,s ,t) (make-diff-exp (parse s) (parse t)))
     ((zero? ,s) (make-zero?-exp (parse s)))
