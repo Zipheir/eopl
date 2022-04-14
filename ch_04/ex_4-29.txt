@@ -1,0 +1,61 @@
+# Exercise 4.29
+
+Arrays for MUTABLE-PAIRS.
+
+Arr-val = (Ref(Exp-val))*
+Exp-val = Int + Bool + Proc + Arr-val
+Den-val = Ref(Exp-val)
+
+The operations:
+
+ (permute-value-of (len elt) ρ σ₀) = ((vlen, velt), σ₁)
+ ⌊vlen⌋ = n ∈ ℕ
+ l₀, …, lₙ₋₁ ∉ dom(σ₁)
+--------------------------------------------------------
+ (value-of (newarray-exp (len elt)) ρ σ₀) =
+   (⌈l₀ × ⋯ × lₙ₋₁⌉, [l₀ = velt, …, lₙ₋₁ = velt]σ₁)
+
+
+ (permute-value-of (arr addr) ρ σ₀) = ((⌈l₀ × ⋯ × lₙ₋₁⌉, vaddr), σ₁)
+ ⌊vaddr⌋ = k, 0 ≤ k < n
+---------------------------------------------------------------------
+     (value-of (arrayref-exp (arr addr)) ρ σ₀) = (σ₁(lₖ), σ₁)
+
+
+ (permute-value-of (arr addr exp₁) ρ σ₀) =
+   ((⌈l₀ × ⋯ × lₙ₋₁⌉, vaddr val₁), σ₁)
+ ⌊vaddr⌋ = k, 0 ≤ k < n
+-----------------------------------------------------
+ (value-of (arrayref-exp (arr addr exp₁)) ρ σ₀) =
+   (⌈82⌉, [lₖ = val₁]σ₁)
+
+There are many options for the implementation, but the book suggests
+the pointer-and-length approach originally described for mutable pairs
+in § 4.4.2:
+
+Array = Ref × Nat,
+
+where the reference is the location of the zeroth element, and the
+natural number element gives the number of consecutive memory
+locations spanned by the array.  So, the valid references of the
+array represented by (l₀, n) are the n locations l₀, l₁, …, lₙ₋₁.
+Arrays are constructed by the array procedure:
+
+;; array : Nat × Exp-val → Arr
+(define (array len val)
+  (let ((base (alloc-array len val)))
+    (make-array base len)))
+
+The alloc-array procedure could be defined in terms of newref, but
+I think this is clearer:
+
+;; alloc-array : Nat × Exp-val → Ref
+;;
+;; Usage: Allocates a consecutive block of locations, sets each to
+;; val, and returns a references to the first.
+(define (alloc-array len val)
+  (let ((next-ref (length the-store)))
+    (set! the-store (append the-store (make-list len val)))
+    next-ref))
+
+See the mutable-pairs-ext branch for the rest of the implementation.
