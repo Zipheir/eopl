@@ -1,0 +1,39 @@
+# Exercise 4.28
+
+Specifications for the mutable pairs operations.  Here,
+
+permute-value-of : List-of(Exp) × Env × Sto → (List-of(Exp-val) × Sto)
+
+is a procedure which evaluates a list of expressions in some
+unspecified order, threading the store through the evaluation
+and returning the values and the final store.  Using this, I
+can accurately describe forms that have an unspecified evaluation
+order for their subexpressions.
+
+ (permute-value-of (exp₁ exp₂) ρ σ₀) = ((val₁, val₂) σ₁)
+ l₁, l₂ ∉ dom(σ₁)
+---------------------------------------------------------
+ (value-of (newpair-exp (exp₁ exp₂)) ρ σ₀) =
+   (⌈l₁ × l₂⌉, [l₁ = val₁, l₂ = val₂]σ₁)
+
+
+       (value-of exp₁ ρ σ₀) = (⌈l₁ × l₂⌉, σ₁)
+--------------------------------------------------
+ (value-of (left-exp (exp₁)) ρ σ₀) = (σ₁(l₁), σ₁)
+
+
+       (value-of exp₁ ρ σ₀) = (⌈l₁ × l₂⌉, σ₁)
+---------------------------------------------------
+ (value-of (right-exp (exp₁)) ρ σ₀) = (σ₁(l₂), σ₁)
+
+
+ (permute-value-of (exp₁ exp₂) ρ σ₀) = ((⌈l₁ × l₂⌉, val) σ₁)
+--------------------------------------------------------------
+ (value-of (setleft-exp (exp₁ exp₂)) ρ σ₀) =
+   (⌈82⌉, [l₁ = val]σ₁)
+
+
+ (permute-value-of (exp₁ exp₂) ρ σ₀) = ((⌈l₁ × l₂⌉, val) σ₁)
+--------------------------------------------------------------
+ (value-of (setright-exp (exp₁ exp₂)) ρ σ₀) =
+   (⌈83⌉, [l₂ = val]σ₁)
