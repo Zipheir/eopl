@@ -1,7 +1,7 @@
 ;;;; MUTABLE-PAIRS language from Ch. 4.
 
 (import (rnrs lists (6))
-        (srfi srfi-11)   ; guile, shouldn't be necessary.
+        ; (srfi srfi-11)   ; guile, shouldn't be necessary.
         (rnrs records syntactic (6)))
 
 (include "pmatch.scm")
