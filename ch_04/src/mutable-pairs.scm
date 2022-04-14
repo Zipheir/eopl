@@ -1,4 +1,5 @@
-;;;; MUTABLE-PAIRS language from Ch. 4.
+;;;; MUTABLE-PAIRS language from Ch. 4 with extensions from
+;;;; the exercises.
 
 (import (rnrs lists (6))
         ; (srfi srfi-11)   ; guile, shouldn't be necessary.
@@ -6,6 +7,20 @@
 
 (include "pmatch.scm")
 (include "../../src/test.scm")
+
+;;;; Utility
+
+;; make-list : Nat x Scheme-val -> List
+(define (make-list len x)
+  (assert (and (integer? len) (not (negative? len))))
+  (letrec
+    ((build
+      (lambda (k)
+        (if (zero? k)
+            '()
+            (cons x (build (- k 1)))))))
+
+    (build len)))
 
 ;;;; Stores
 
@@ -27,6 +42,12 @@
 (define (newref val)
   (let ((next-ref (length the-store)))
     (set! the-store (append the-store (list val)))
+    next-ref))
+
+;; alloc-array : Nat x Exp-val -> Ref
+(define (alloc-array n val)
+  (let ((next-ref (length the-store)))
+    (set! the-store (append the-store (make-list n val)))
     next-ref))
 
 ;; deref : Ref -> Exp-val
@@ -98,6 +119,15 @@
 (define-record-type setright-exp
   (fields exp1 exp2))
 
+(define-record-type newarray-exp
+  (fields len exp1))
+
+(define-record-type arrayref-exp
+  (fields arr addr))
+
+(define-record-type arrayset-exp
+  (fields arr addr exp1))
+
 ;;;; Expressed values
 
 (define-record-type num-val
@@ -113,6 +143,9 @@
 
 (define-record-type mutpair-val
   (fields pair))
+
+(define-record-type array-val
+  (fields arr))
 
 ;; expval->num : Exp-val -> Int
 (define (expval->num val)
@@ -137,6 +170,12 @@
   (if (mutpair-val? val)
       (mutpair-val-pair val)
       (report-expval-extractor-error 'mutpair val)))
+
+;; expval->array : Exp-val -> Arr
+(define (expval->array val)
+  (if (array-val? val)
+      (array-val-arr val)
+      (report-expval-extractor-error 'array val)))
 
 (define (report-expval-extractor-error variant value)
   (error 'expval-extractors
@@ -170,6 +209,33 @@
 ;; setright : Mut-pair x Exp-val -> Unspecified
 (define (setright p val)
   (setref! (mut-pair-val2 p) val))
+
+;;;; Arrays
+
+(define-record-type (array make-raw-array array?)
+  (fields base length))
+
+;; make-array : Nat x Exp-val -> Arr
+(define (make-array len val)
+  (make-raw-array (alloc-array len val) len))
+
+;; array-ref : Arr x Nat -> Exp-val
+(define (array-ref arr k)
+  (let ((len (array-length arr)))
+    (if (< k len)
+        (deref (+ (array-base arr) k))
+        (report-bounds-error k))))
+
+;; set-array! : Arr x Nat x Exp-val -> Unspecified
+(define (set-array! arr k val)
+  (let ((len (array-length arr)))
+    (if (< k len)
+        (setref! (+ (array-base arr) k) val)
+        (report-bounds-error k))))
+
+;; report-bounds-error : Nat -> ()
+(define (report-bounds-error k)
+  (error 'array-ref "array index out of bounds" k))
 
 ;;;; Procedures
 
@@ -333,6 +399,20 @@
            (begin
             (setright (expval->mutpair val1) val2)
             the-unspecified-value)))
+        ((newarray-exp? exp)
+         (let ((vlen (value-of (newarray-exp-len exp) env))
+               (val (value-of (newarray-exp-exp1 exp) env)))
+           (make-array-val (make-array (expval->num vlen) val))))
+        ((arrayref-exp? exp)
+         (let ((varr (value-of (arrayref-exp-arr exp) env))
+               (vk (value-of (arrayref-exp-addr exp) env)))
+           (array-ref (expval->array varr) (expval->num vk))))
+        ((arrayset-exp? exp)
+         (let ((varr (value-of (arrayset-exp-arr exp) env))
+               (vk (value-of (arrayset-exp-addr exp) env))
+               (val (value-of (arrayset-exp-exp1 exp) env)))
+           (set-array! (expval->array varr) (expval->num vk) val)
+           the-unspecified-value))
         (else (error 'value-of "invalid expression" exp))))
 
 ;; Parser for a simple S-exp representation.
@@ -357,6 +437,10 @@
     ((right ,e) (make-right-exp (parse e)))
     ((setl ,e1 ,e2) (make-setleft-exp (parse e1) (parse e2)))
     ((setr ,e1 ,e2) (make-setright-exp (parse e1) (parse e2)))
+    ((newarray ,l ,e) (make-newarray-exp (parse l) (parse e)))
+    ((arrayref ,a ,k) (make-arrayref-exp (parse a) (parse k)))
+    ((arrayset ,a ,k ,e)
+     (make-arrayset-exp (parse a) (parse k) (parse e)))
     ((,e1 ,e2) (make-call-exp (parse e1) (parse e2)))
     (? (error 'parse "invalid syntax" sexp))))
 
