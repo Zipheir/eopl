@@ -423,4 +423,16 @@
                                           (even 4)))))
                in (let dum = (set x 5) in
                     (even 888))))))
+
+  (test 5 (eval-to-num '(let p = (: 5 4) in (left p))))
+  (test 4 (eval-to-num '(let p = (: 5 4) in (right p))))
+  (test 2 (eval-to-num '(let p = (: 5 1) in
+                          (let dum = (setl p 3) in
+                            (- (left p) (right p))))))
+  (test 2 (eval-to-num '(let p = (: 5 4) in
+                          (let dum = (setr p 3) in
+                            (- (left p) (right p))))))
+  (test 2 (eval-to-num '(let ns = (: 5 (: 2 (: 1 emptylist))) in
+                          (- (- (left ns) (left (right ns)))
+                             (left (right (right ns)))))))
   )
