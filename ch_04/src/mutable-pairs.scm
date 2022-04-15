@@ -526,4 +526,11 @@
   (test 2 (eval-to-num '(let ns = (: 5 (: 2 (: 1 emptylist))) in
                           (- (- (left ns) (left (right ns)))
                              (left (right (right ns)))))))
+
+  (test 4 (eval-to-num '(let a = (newarray 4 2) in
+                          (- (arrayref a 0) (- 0 (arrayref a 1))))))
+  (test 6 (eval-to-num '(let a = (newarray 4 2) in
+                          (let dum = (arrayset a 3 4) in
+                            (- (arrayref a 0) (- 0 (arrayref a 3)))))))
+  (test 4 (eval-to-num '(let a = (newarray 4 2) in (arraylength a))))
   )
