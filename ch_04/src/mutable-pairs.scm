@@ -128,6 +128,9 @@
 (define-record-type arrayset-exp
   (fields arr addr exp1))
 
+(define-record-type arraylength-exp
+  (fields arr))
+
 ;;;; Expressed values
 
 (define-record-type num-val
@@ -413,6 +416,9 @@
                (val (value-of (arrayset-exp-exp1 exp) env)))
            (set-array! (expval->array varr) (expval->num vk) val)
            the-unspecified-value))
+        ((arraylength-exp? exp)
+         (let ((varr (value-of (arraylength-exp-arr exp) env)))
+           (make-num-val (array-length (expval->array varr)))))
         (else (error 'value-of "invalid expression" exp))))
 
 ;; Parser for a simple S-exp representation.
@@ -441,6 +447,7 @@
     ((arrayref ,a ,k) (make-arrayref-exp (parse a) (parse k)))
     ((arrayset ,a ,k ,e)
      (make-arrayset-exp (parse a) (parse k) (parse e)))
+    ((arraylength ,a) (make-arraylength-exp (parse a)))
     ((,e1 ,e2) (make-call-exp (parse e1) (parse e2)))
     (? (error 'parse "invalid syntax" sexp))))
 
