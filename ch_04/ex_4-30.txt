@@ -1,0 +1,20 @@
+# Exercise 4.30
+
+This exercise adds an arraylength form to MUTABLE-PAIRS.  Although
+the book describes this as a "procedure", it would have to be a
+*primitive* procedure, evaluated differently.  Adding primitives
+à la SICP would be a big change, though, so I'll just add a built-in
+form.
+
+Expression ::= arraylength Expression
+               [arraylength-exp exp₁]
+
+Semantics:
+
+ (value-of exp₁ ρ σ₀) = ((array-val l₀ × ⋯ × lₙ₋₁), σ₁)
+--------------------------------------------------------
+     (value-of (arraylength-exp exp₁) ρ σ₀) = ⌈n⌉
+
+This is of course pretty opaque as an implementation guide, but
+it's very straightforward with the ref-and-length array
+representation used in Ex. 4.29.
