@@ -1,0 +1,56 @@
+# Exercise 4.27
+
+This adds subroutines to BASICALLY (ex. 4.22).  The body of a
+subroutine is a statement, not an expression, and so calling a
+subroutine is itself a statement.  This means that there are now
+(procedure) call expressions *and* (subroutine) call statements.
+These could be syntactically distinct, but I think that no
+ambiguity will result if they are written identically.  We'll see.
+
+I think the coexistence of procedures and subroutines could have
+used some more discussion.
+
+The expressed values now include subroutines:
+
+Exp-val = Int + Bool + Proc + Sub
+
+Admittedly, first-class subroutines seem a little odd, but that's
+the framework that the language has inherited.  Subroutines also
+have lexical scope.
+
+Here's the syntax of the new and modified forms.
+
+Statement ::= (Identifier Expression)
+              [call-stmt (rator rand)]
+          ::= var ({Identifier = Expression}*(,)) : Statement
+              [block-stmt (vars exps body)]
+
+Expression ::= sub (Identifier) Statement
+               [sub-exp (name body)]
+
+This uses the multi-binding block statement from Ex. 4.25.
+Alternatively, I could define forms
+
+var-sub Identifier (Identifier) = Statement : Statement
+var-proc Identifier (Identifier) = Expression : Statement
+
+for specifically creating procedures and subroutines.  This is
+redundant as long as both objects are expressed values of the
+language, however.
+
+The semantics:
+
+(value-of (sub-exp (name body)) ρ σ) =
+  (sub-val (subroutine name body ρ))
+
+(value-of rator ρ σ₀) = ((sub-val sub), σ₁)
+(value-of rand ρ σ₁) = (vrand, σ₂)
+-------------------------------------------------------------
+ (result-of (call-stmt rator rand) ρ σ₀) =
+   (exec-subroutine sub vrand)
+
+(define (exec-subroutine sub val)
+  (result-of (sub-val-sub sub)
+             (extend-env (sub-val-saved-env sub)
+                         (sub-val-bound-var sub)
+                         val)))
