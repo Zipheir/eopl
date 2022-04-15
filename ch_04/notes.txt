@@ -302,3 +302,55 @@ abstraction leak.  It creates a Ref without using the newref
 constructor, and, in general, adding integers and references will
 not produce a valid reference unless the length of each object's
 representation in memory is known.
+
+## 4.5 Parameter-passing variations
+
+So far, we've seen "natural" parameter passing, in which procedure
+application binds the formal parameter of a procedure to the expressed
+value of the actual parameter, and call-by-value, in which the formal
+parameter denotes a location containing the expressed value of the actual
+parameter (but this location is distinct from the one denoted by the
+actual parameter).
+
+let p = proc (x) set x = 4
+in let a = 3
+   in begin (p a); a end
+
+Under call-by-value, this evaluates to 3, because the references
+denoted by a and by x (in the procedure p) are distinct, even though
+they contain the same expressed value.
+
+Generally, this is what we want.  But sometimes (especially in
+languages in which it's idiomatic to use mutation to get things done)
+it is useful to allow procedures to be passed locations for them to
+assign to.  One way to do this is called call-by-reference.
+
+Under this approach, applications with variable-expression operands
+are treated differently, namely, a reference to the location of the
+variable argument is passed to the procedure.  Other kinds of operand
+expressions are handled as in call-by-value.
+
+Call-by-reference provides an easy way to return multiple values.
+A procedure can return one value and assign others to passed variables.
+
+The values of the CALL-BY-REFERENCE language are the same as those
+of IMPLICIT-REFS:
+
+Exp-val = Int + Bool + Proc
+Den-val = Ref(Exp-val)
+
+The only difference is that some location allocations are omitted that
+would occur under call-by-value.  See src/call-by-ref.scm for an
+implementation.
+
+Something that's lost with call-by-reference is the consistency
+of call-by-value.  Here, variable arguments become a special case,
+so there's no longer one, simple rule for evaluating applications.
+
+let can also be made to use call-by-reference (see Ex. 4.34).
+
+A very big danger of call-by-reference is *variable aliasing*.
+Passing the same variable two or more times results in multiple
+names being bound to the same location, and this can occur more
+plausibly when passing a variable to procedures which are in
+some way interdependent.
