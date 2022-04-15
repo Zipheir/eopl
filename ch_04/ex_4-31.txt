@@ -1,0 +1,23 @@
+# Exercise 4.31
+
+The specification for CALL-BY-REFERENCE is identical to that of
+IMPLICIT-REFS except for the rules relating to procedure application.
+One way to specify calls is with two separate rules:
+
+       (value-of rator ρ σ₀) = (val, σ₁)
+---------------------------------------------------- app-var
+ (value-of (call-exp (rator (var-exp var))) ρ σ₀) =
+   (apply-procedure (expval->proc val) ρ(var) σ₁)
+
+
+ (permute-value-of (rator rand) ρ σ₀) = ((vrat vrand), σ₁)
+ rand ∉ var-exp
+ l ∉ dom(σ₁)
+----------------------------------------------------------- app-exp
+ (value-of (call-exp (rator rand)) ρ σ₀) =
+   (apply-procedure (expval->proc vrat) l [l = vrand]σ₁)
+
+The rule for apply-procedure becomes:
+
+(apply-procedure (procedure var body ρ) ref σ) =
+  (value-of body [var = ref]ρ σ)
