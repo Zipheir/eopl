@@ -27,3 +27,6 @@ lifted to lists):
            (var-exp (var) (apply-env env var))
            (else (newref (value-of e env)))))
        exps))
+
+The rest is just the usual adaptations of the procedure representation
+and parser to handle argument lists.
