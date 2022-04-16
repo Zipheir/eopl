@@ -83,20 +83,20 @@
 (define (apply-procedure proc1 vals)
   (pmatch proc1
     ((proc ,vars ,body ,env)
-     (value-of body (extend-env-all vars vals env)))))
+     (value-of body (extend-env vars vals env)))))
 
 ;;;; Environments
 
 ;; empty-env : () -> Env
 (define (empty-env) '())
 
-;; extend-env : Var x Exp-val x Env -> Env
-(define (extend-env var val env)
-  (cons (list 'ext var val) env))
+;; extend-env : List-of(Var) x List-of(Exp-val) x Env -> Env
+(define (extend-env vars vals env)
+  (cons (list 'ext vars vals) env))
 
-;; extend-env-all : List-of(Var) x List-of(Exp-val) x Env -> Env
-(define (extend-env-all vars vals env)
-  (fold-right extend-env env vars vals))
+;; extend-env1 : Var x Exp-val x Env -> Env
+(define (extend-env1 var val env)
+  (extend-env (list var) (list val) env))
 
 ;; extend-env-rec : List-of(Var) x List-of(Var) x List-of(Exp-val)
 ;;                  x Env -> Env
@@ -107,8 +107,10 @@
 (define (apply-env env search-var)
   (pmatch env
     (() (report-no-binding-found search-var))
-    (((ext ,var ,val) . ,env*)
-     (if (eqv? search-var var) val (apply-env env* search-var)))
+    (((ext ,vars ,vals) . ,env*)
+     (cond ((location search-var vars) =>
+            (lambda (n) (list-ref vals n)))
+           (else (apply-env env* search-var))))
     (((ext-rec ,p-names ,b-vars ,p-bodies) . ,env*)
      (cond ((location search-var p-names) =>
             (lambda (n)
@@ -140,18 +142,15 @@
 ;; alist->env : List-of(Var x Scheme-val) -> Env
 ;; No recursive bindings.
 (define (alist->env as)
-  (fold-right (lambda (p env)
-                (extend-env (car p) (newref (cdr p)) env))
-              (empty-env)
-              as))
+  (extend-env (map car as) (map cdr as) (empty-env)))
 
 ;;; Initial environment
 
 ;; init-env : () -> Env
 (define (init-env)
-  (alist->env `((i . (num-val 1))
-                (v . (num-val 5))
-                (x . (num-val 10)))))
+  (alist->env `((i . ,(newref '(num-val 1)))
+                (v . ,(newref '(num-val 5)))
+                (x . ,(newref '(num-val 10))))))
 
 ;;;; Main interpreter
 
@@ -187,7 +186,7 @@
     ((let-exp ,var ,exp1 ,body)
      (let ((val (value-of exp1 env)))
        (value-of body
-                 (extend-env var (newref val) env))))
+                 (extend-env1 var (newref val) env))))
     ((proc-exp ,vars ,body)
      `(proc-val ,(procedure vars body env)))
     ((call-exp ,rator ,rands)
@@ -250,14 +249,14 @@
 (define (parse-letrec binds body)
   (letrec
     ((collect
-      (lambda (bs names vars bodies)
+      (lambda (bs names var-lists bodies)
         (pmatch bs
-          (() (values names vars bodies))
-          (((,name (,var) = ,body) . ,bs*)
-           (guard (symbol? name) (symbol? var))
+          (() (values names var-lists bodies))
+          (((,name ,vs = ,body) . ,bs*)
+           (guard (symbol? name) (for-all symbol? vs))
            (collect bs*
                     (cons name names)
-                    (cons var vars)
+                    (cons vs var-lists)
                     (cons (parse body) bodies)))))))
 
     (let-values (((names vars bodies) (collect binds '() '() '())))
@@ -328,4 +327,9 @@
                in (let a = 33 in
                     (let b = 44 in
                       (begin ((swap a) b) (- a b)))))))
+  (test 44 (eval-to-num
+            '(letrec ((f (x) = (set x 44))
+                      (g (y) = (f y))) in
+               (let z = 55 in
+                 (begin (g z) z)))))
   )
