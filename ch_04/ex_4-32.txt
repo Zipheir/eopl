@@ -1,0 +1,29 @@
+# Exercise 4.32
+
+This exercise extends the CALL-BY-REFERENCE language with
+multi-argument procedures.  The implementation of this is pretty
+easy (given past similar exercises), but the spec. is a bit hairy.
+The simplest way to write it (that I can think of at the moment):
+
+             (value-of rator ρ σ₀) = (proc, σ₁)
+ (value-of-operands (rand₁ … randₙ) ρ σ₁) = ((val₁ … valₙ), σ₂)
+----------------------------------------------------------------
+     (value-of (call-exp rator (rand₁ … randₙ)) ρ σ₀) =
+       (apply-procedure proc (val₁ … valₙ) ρ σ₂)
+
+For simplicity, this evaluates the operator expression before
+the operands.  This order should be unspecified, but the use
+of two different evaluation functions makes this tricky to write.
+
+So apply-procedure now takes a list of values (just like in
+previous languages with multi-arg procedures), and a new procedure
+value-of-operands is added (which is basically just value-of-operand
+lifted to lists):
+
+;; value-of-operands : List-of(Exp) × Env → Ref
+(define (value-of-operands exps env)
+  (map (lambda (e)
+         (cases expression e
+           (var-exp (var) (apply-env env var))
+           (else (newref (value-of e env)))))
+       exps))
