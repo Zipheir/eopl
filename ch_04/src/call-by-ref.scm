@@ -76,14 +76,14 @@
 
 ;;;; Procedures
 
-(define (procedure b-var body saved-env)
-  (list 'proc b-var body saved-env))
+(define (procedure b-vars body saved-env)
+  (list 'proc b-vars body saved-env))
 
-;; apply-procedure : Proc x Ref -> Exp-val
-(define (apply-procedure proc1 val)
+;; apply-procedure : Proc x List-of(Ref) -> Exp-val
+(define (apply-procedure proc1 vals)
   (pmatch proc1
-    ((proc ,var ,body ,env)
-     (value-of body (extend-env var val env)))))
+    ((proc ,vars ,body ,env)
+     (value-of body (extend-env-all vars vals env)))))
 
 ;;;; Environments
 
@@ -93,6 +93,10 @@
 ;; extend-env : Var x Exp-val x Env -> Env
 (define (extend-env var val env)
   (cons (list 'ext var val) env))
+
+;; extend-env-all : List-of(Var) x List-of(Exp-val) x Env -> Env
+(define (extend-env-all vars vals env)
+  (fold-right extend-env env vars vals))
 
 ;; extend-env-rec : List-of(Var) x List-of(Var) x List-of(Exp-val)
 ;;                  x Env -> Env
@@ -184,12 +188,12 @@
      (let ((val (value-of exp1 env)))
        (value-of body
                  (extend-env var (newref val) env))))
-    ((proc-exp ,var ,body)
-     `(proc-val ,(procedure var body env)))
-    ((call-exp ,rator ,rand)
+    ((proc-exp ,vars ,body)
+     `(proc-val ,(procedure vars body env)))
+    ((call-exp ,rator ,rands)
      (let ((proc (expval->proc (value-of rator env)))
-           (arg (value-of-operand rand env)))
-       (apply-procedure proc arg)))
+           (args (value-of-operands rands env)))
+       (apply-procedure proc args)))
     ((letrec-exp ,p-names ,b-vars ,p-bodies ,letrec-body)
      (value-of letrec-body
                (extend-env-rec p-names b-vars p-bodies env)))
@@ -199,11 +203,13 @@
     ((begin-exp ,es) (value-of-sequence es env))
     (? (error 'value-of "invalid expression" exp))))
 
-;; value-of-operand : Exp x Env -> Ref
-(define (value-of-operand exp env)
-  (pmatch exp
-    ((var-exp ,var) (apply-env env var))
-    (? (newref (value-of exp env)))))
+;; value-of-operands : List-of(Exp) x Env -> List-of(Ref)
+(define (value-of-operands exps env)
+  (map (lambda (e)
+         (pmatch e
+           ((var-exp ,var) (apply-env env var))
+           (? (newref (value-of e env)))))
+       exps))
 
 ;; value-of-sequence : List-of(Exp) -> Exp-val
 (define (value-of-sequence exps env)
@@ -230,13 +236,14 @@
     (,v (guard (symbol? v)) `(var-exp ,v))
     ((let ,v = ,s in ,b) (guard (symbol? v))
      `(let-exp ,v ,(parse s) ,(parse b)))
-    ((proc (,v) ,body) (guard (symbol? v))
-     `(proc-exp ,v ,(parse body)))
+    ((proc ,vs ,body)
+     (guard (pair? vs) (for-all symbol? vs))
+     `(proc-exp ,vs ,(parse body)))
     ((letrec ,bs in ,body) (parse-letrec bs body))
     ((set ,v ,ve) (guard (symbol? v))
      `(assign-exp ,v ,(parse ve)))
     ((begin . ,es) `(begin-exp ,(map parse es)))
-    ((,e1 ,e2) `(call-exp ,(parse e1) ,(parse e2)))
+    ((,et . ,ens) `(call-exp ,(parse et) ,(map parse ens)))
     (? (error 'parse "invalid syntax" sexp))))
 
 ;; parse-letrec : List x List -> Exp
