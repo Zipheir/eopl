@@ -44,8 +44,8 @@
        (pmatch-aux name v cs ...)))
     ((pmatch-aux name v)  ; no more clauses
      (if 'name
-         (error "pmatch failed" 'name v)
-         (error "pmatch failed" v)))
+         (error 'pmatch "pmatch failed" 'name v)
+         (error 'pmatch "pmatch failed" v)))
     ((pmatch-aux _ _ (else e0 e ...)) (begin e0 e ...))
     ((pmatch-aux name v (pat (guard g ...) e0 e ...) cs ...)
      (let ((fk (lambda () (pmatch-aux name v cs ...))))
