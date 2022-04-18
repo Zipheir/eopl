@@ -1,4 +1,5 @@
-;;;; IMPLICIT-REFS language from Ch. 4.
+;;;; IMPLICIT-REFS language from Ch. 4, extended with ref expressions.
+;;;; (Ex. 4.35)
 
 (import (rnrs base (6))
         (rnrs lists (6))
@@ -78,6 +79,15 @@
 (define-record-type assign-exp
   (fields var exp1))
 
+(define-record-type ref-exp
+  (fields var))
+
+(define-record-type deref-exp
+  (fields exp1))
+
+(define-record-type setref-exp
+  (fields ref exp1))
+
 ;;;; Expressed values
 
 (define-record-type num-val
@@ -88,6 +98,9 @@
 
 (define-record-type proc-val
   (fields proc))
+
+(define-record-type ref-val
+  (fields ref))
 
 ;; expval->num : Exp-val -> Int
 (define (expval->num val)
@@ -106,6 +119,12 @@
   (if (proc-val? val)
       (proc-val-proc val)
       (report-expval-extractor-error 'proc val)))
+
+;; expval->ref : Exp-val -> Ref
+(define (expval->ref val)
+  (if (ref-val? val)
+      (ref-val-ref val)
+      (report-expval-extractor-error 'ref val)))
 
 (define (report-expval-extractor-error variant value)
   (error 'expval-extractors
@@ -254,6 +273,16 @@
          (setref! (apply-env env (assign-exp-var exp))
                   (value-of (assign-exp-exp1 exp) env))
          the-unspecified-value)
+        ((ref-exp? exp)
+         (make-ref-val (apply-env env (ref-exp-var exp))))
+        ((deref-exp? exp)
+         (let ((val (value-of (deref-exp-exp1 exp) env)))
+           (deref (expval->ref val))))
+        ((setref-exp? exp)
+         (let ((vref (value-of (setref-exp-ref exp) env))
+               (val1 (value-of (setref-exp-exp1 exp) env)))
+           (setref! (expval->ref vref) val1)
+           the-unspecified-value))
         (else (error 'value-of "invalid expression" exp))))
 
 ;; Parser for a simple S-exp representation.
@@ -272,6 +301,9 @@
     ((letrec ,bs in ,body) (parse-letrec bs body))
     ((set ,v ,ve) (guard (symbol? v))
      (make-assign-exp v (parse ve)))
+    ((ref ,v) (guard (symbol? v)) (make-ref-exp v))
+    ((deref ,e) (make-deref-exp (parse e)))
+    ((setref ,e1 ,e2) (make-setref-exp (parse e1) (parse e2)))
     ((,e1 ,e2) (make-call-exp (parse e1) (parse e2)))
     (? (error 'parse "invalid syntax" sexp))))
 
@@ -338,4 +370,12 @@
                                           (even 4)))))
                in (let dum = (set x 5) in
                     (even 888))))))
+
+  ;; Mimicking call-by-reference.
+
+  (test 5 (eval-to-num
+           '(let x = 6 in
+              (let decr = (proc (r) (setref r (- (deref r) 1))) in
+                (let dum = (decr (ref x)) in
+                  x)))))
   )
