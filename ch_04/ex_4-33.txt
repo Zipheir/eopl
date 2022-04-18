@@ -1,0 +1,48 @@
+# Exercise 4.33
+
+Call-by-value procedures for CALL-BY-REFERENCE.
+
+There are two ways in which I could do this: have two kinds of
+procedures or two kinds of application.  In the first approach, the
+application semantics of a procedure are established when the
+procedure is created, while, in the latter, each procedure *call*
+can be by-reference or by-value.  I prefer the first design, since
+procedures intended to be called with references won't work when
+called with values (and worse things can happen in the reverse
+situation).
+
+So the existing procedures of the language become refproc-exps, and
+a new type of valprocs is added:
+
+Expression ::= refproc (Identifier) Expression
+               [refproc-exp (var body saved-env)]
+
+           ::= valproc (Identifier) Expression
+               [valproc-exp (var body saved-env)]
+
+The semantics of both have been done in other places.  While I'll
+want two kinds of expressed procedure value, both can be represented
+by the same internal structure (constructed by the 'procedure'
+constructor).  (Alternatively, the language can have only one kind of
+expressed procedure value, represented internally by two different
+structures.)
+
+Here's the relevant snippet of the evaluator (using the book's 'cases'
+framework, not my tagged-lists implementation):
+
+;; ...
+(call-exp (rator rand)
+  (let ((pval (value-of rator env)))
+    (cases expval pval
+      (refproc-val (proc)
+        (let ((arg (value-of-operand rand env)))
+          (apply-procedure proc arg)))
+      (valproc-val (proc)
+        (let ((arg (value-of rand env)))
+          (apply-procedure proc arg)))
+      (else (error 'value-of "invalid operator, expected proc" pval)))))
+
+If this seems like an abstraction leak (usually expressed values are
+accessed through their accessor procedures), you could write a procedure
+that returns the procedure contained in the expval along with a value
+indicating whether it's a refproc/valproc.
