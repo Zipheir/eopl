@@ -26,7 +26,7 @@ The operations:
    ((⌈l₀ × ⋯ × lₙ₋₁⌉, vaddr val₁), σ₁)
  ⌊vaddr⌋ = k, 0 ≤ k < n
 -----------------------------------------------------
- (value-of (arrayref-exp (arr addr exp₁)) ρ σ₀) =
+ (value-of (arrayset-exp (arr addr exp₁)) ρ σ₀) =
    (⌈82⌉, [lₖ = val₁]σ₁)
 
 There are many options for the implementation, but the book suggests
