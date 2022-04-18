@@ -20,3 +20,21 @@ Here's the rule for ref:
 
 -----------------------------------------
  (value-of (ref-exp (var)) ρ σ) = ρ(var)
+
+
+Further discussion: The deref form is convenient but inessential, since
+it's always possible to pass a variable's reference *and* value, e.g.
+
+let a = 5
+in let f = proc (r) proc (v)
+             setref(r, -(v, 1))
+   in ((f (ref a)) a)
+
+Of course, this is pretty clumsy.
+
+A much more interesting question is whether the language needs both
+'set' and 'setref'.  The difference is subtle: set assigns to a
+location denoted by a variable, whereas setref assigns to a location
+which is computed by evaluating an expression.  It's worth thinking
+about how whether these two could be unified, and what the
+consequences would be.
