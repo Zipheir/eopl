@@ -200,15 +200,20 @@
      (setref! (apply-env env var) (value-of e env))
      the-unspecified-value)
     ((begin-exp ,es) (value-of-sequence es env))
+    ((letref-exp ,var ,exp1 ,body)
+     (let ((val (value-of-operand exp1 env)))
+       (value-of body (extend-env1 var val env))))
     (? (error 'value-of "invalid expression" exp))))
+
+;; value-of-operand : Exp x Env -> Ref
+(define (value-of-operand exp env)
+  (pmatch exp
+    ((var-exp ,var) (apply-env env var))
+    (? (newref (value-of exp env)))))
 
 ;; value-of-operands : List-of(Exp) x Env -> List-of(Ref)
 (define (value-of-operands exps env)
-  (map (lambda (e)
-         (pmatch e
-           ((var-exp ,var) (apply-env env var))
-           (? (newref (value-of e env)))))
-       exps))
+  (map (lambda (e) (value-of-operand e env)) exps))
 
 ;; value-of-sequence : List-of(Exp) -> Exp-val
 (define (value-of-sequence exps env)
@@ -242,6 +247,8 @@
     ((set ,v ,ve) (guard (symbol? v))
      `(assign-exp ,v ,(parse ve)))
     ((begin . ,es) `(begin-exp ,(map parse es)))
+    ((letref ,v = ,e in ,body) (guard (symbol? v))
+     `(letref-exp ,v ,(parse e) ,(parse body)))
     ((,et . ,ens) `(call-exp ,(parse et) ,(map parse ens)))
     (? (error 'parse "invalid syntax" sexp))))
 
@@ -332,4 +339,13 @@
                       (g (y) = (f y))) in
                (let z = 55 in
                  (begin (g z) z)))))
+
+  (test 5 (eval-to-num
+           '(letref a = 3 in
+              (letref b = a in
+                (begin (set a 5) b)))))
+  (test 5 (eval-to-num
+           '(letref a = 3 in
+              (letref b = a in
+                (begin (set b 5) a)))))
   )
