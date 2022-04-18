@@ -1,0 +1,22 @@
+# Exercise 4.35
+
+This adds a 'ref' form to IMPLICIT-REFS.
+
+Expression ::= ref Identifier
+               [ref-exp (var)]
+
+The value of a ref expression is a reference to the location denoted
+by the given variable.  Since this provides a way to get references as
+values in this language, the expressed values change:
+
+Exp-val = Int + Bool + Proc + Ref(Exp-val)
+
+The example for this exercise shows additional infrastructure for
+working with reference values, namely deref and setref expressions.
+The semantics for these are basically the same as they were in the
+earlier language.
+
+Here's the rule for ref:
+
+-----------------------------------------
+ (value-of (ref-exp (var)) ρ σ) = ρ(var)
