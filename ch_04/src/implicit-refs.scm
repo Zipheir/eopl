@@ -1,6 +1,7 @@
 ;;;; IMPLICIT-REFS language from Ch. 4.
 
-(import (rnrs lists (6))
+(import (rnrs base (6))
+        (rnrs lists (6))
         (rnrs records syntactic (6)))
 
 (include "pmatch.scm")

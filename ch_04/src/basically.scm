@@ -1,6 +1,7 @@
 ;;;; BASICALLY language from Ex. 4.22
 
-(import (rnrs lists (6))
+(import (rnrs base (6))
+        (rnrs lists (6))
         (rnrs records syntactic (6)))
 
 (include "pmatch.scm")
