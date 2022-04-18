@@ -1,0 +1,17 @@
+# Exercise 4.34
+
+This exercise adds a call-by-reference let variant, called letref.
+Here's the specification for the single-binding version.  I'll write
+two rules covering the variable and non-variable cases.
+
+---------------------------------------------------------- letref-var
+ (value-of (letref-exp (var₁ (var-exp var₂) body)) ρ σ) =
+        (value-of body [var₁ = ρ(var₂)]ρ σ)
+
+
+ (value-of exp₁ ρ σ₀) = (val₁, σ₁)
+ l ∉ dom(σ₁)
+ exp₁ ∉ var-exp
+-------------------------------------------------
+ (value-of (letref-exp var exp₁ body) ρ σ₀) =
+   (value-of body [var = l]ρ [l = val₁]σ₁)
