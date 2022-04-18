@@ -2,7 +2,7 @@
 
 The specification for let in IMPLICIT-REFS:
 
-     (value-of exp₁ ρ σ₀) = (val₁, σ₁)
--------------------------------------------
+ (value-of exp₁ ρ σ₀) = (val₁, σ₁)   l ∉ dom(σ₁)
+-------------------------------------------------
  (value-of (let-exp var exp₁ body) ρ σ₀) =
    (value-of body [var = l]ρ [l = val₁]σ₁)
