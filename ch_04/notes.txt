@@ -354,3 +354,73 @@ Passing the same variable two or more times results in multiple
 names being bound to the same location, and this can occur more
 plausibly when passing a variable to procedures which are in
 some way interdependent.
+
+### 4.5.2 Lazy evaluation
+
+So far, we've only seen eager parameter-passing, i.e. mechanisms
+in which application is strict in the evaluation of the parameters.
+
+In the next language, a bound variable of a procedure will be
+associated with an unevaluated ("frozen") operand, which is
+evaluated ("thawed") when the procedure body needs its value.
+
+Frozen operands must also include the environment in which they
+should be evaluated.  (One could easily forget this detail.  I
+wonder if any languages implemented lazy evaluation without stored
+environments?)  The type of thunks packages up the relevanta data:
+
+Thunk = A-Thunk Exp Env
+
+Thunks are evaluated by value-of-thunk (p. 137), which is
+straightforward.
+
+This is still the "State" chapter, though, so the language has to
+account for effects and lazy evaluation.  (Fun! ... ?  This is a
+surprisingly tricky place in which to introduce laziness.)
+
+The domain equations of the new language:
+
+Den-val = Ref(Exp-val + Thunk)
+Exp-val = Int + Bool + Proc
+
+New locations will be allocated as in call-by-reference:
+
+(define (value-of-operand exp env)
+  (cases expression exp
+    (var-exp (var) (apply-env env var))
+    (else (newref (a-thunk exp env)))))
+
+This language uses *call-by-name*: when a variable expression is
+evaluated and the denoted location contains a thunk, that thunk
+is evaluated.  If the location contains an expressed value, then
+it's returned as usual.  This looks pretty straightforward in the
+evaluator implementation:
+
+; ...
+(var-exp (var)
+  (let* ((ref1 (apply-env env var))
+         (w (deref ref1)))
+    (if (expval? w)
+        w
+        (value-of-thunk w))))
+
+Note that this does not replace the stored thunk with its result;
+that would be *call-by-need*, and could be implemented by:
+
+; ...
+(var-exp (var)
+  (let* ((ref1 (apply-env env var))
+         (w (deref ref1)))
+    (if (expval? w)
+        w
+        (let ((val1 (value-of-thunk w)))
+          (setref! ref1 val1)
+          val1))))
+
+This is an example of *memoization*.
+
+Lazy evaluation makes for very simple reasoning about programs
+(I'd like them to discuss this further), but it makes order of
+evaluation very difficult to determine.  Thus, it interacts poorly
+with effects.  (Then why the fsck did you present it in this
+chapter on effects?)
