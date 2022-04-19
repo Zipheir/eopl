@@ -1,0 +1,42 @@
+# Exercise 4.36
+
+This extends CALL-BY-REFERENCE with arrays.  Array references are
+passed by reference.
+
+I previously implemented arrays for MUTABLE-PAIRS, but that language
+provided some infrastructure for them.  It'll take a bit more work
+to provide them here.  In any case, here's the formal stuff.  The
+expressed values of the language are now:
+
+Exp-val = Int + Bool + Proc + Arr-val
+Arr-val = (Ref(Exp-val))*
+
+The syntax doesn't matter all that much, since I'm using S-exps in
+the implementations for convenience.  Here are the types representing
+the new forms:
+
+;; len : Nat
+;; Elt : Exp-val
+(newarray-exp (len elt))
+
+;; arr, addr : Exp-val
+(arrayref-exp (arr addr))
+
+;; arr, addr, exp1 : Exp-val
+(arrayset-exp (arr addr exp1))
+
+The semantics are the same as in Ex. 4.29, as are most of the
+evaluator details; the only change worth mentioning is that array-ref
+should return a reference, rather than the stored value.
+
+Here's the call-by-reference part of the evaluator, which affects
+only the value-of-operand helper procedure:
+
+(define (value-of-operand exp env)
+  (cases expression exp
+    (var-exp (var) (apply-env env var))
+    (arrayref-exp (arr addr)
+      (let ((array1 (expval->array (value-of arr env)))
+            (at (value-of addr env)))
+        (array-ref array1 at)))
+    (else (error ...))))
