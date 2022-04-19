@@ -51,6 +51,13 @@
 
     (set! the-store (setref-inner the-store ref))))
 
+;; alloc-array : Nat x Exp-val -> Ref
+(define (alloc-array len val)
+  (let ((next-ref (length the-store))
+        (store* (append the-store (make-list len val))))
+    (set! the-store store*)
+    next-ref))
+
 ;;;; Expressed values
 
 ;; expval->num : Exp-val -> Int
@@ -64,6 +71,12 @@
   (pmatch val
     ((bool-val ,b) b)
     (? (report-expval-extractor-error 'bool val))))
+
+;; expval->array : Exp-val -> Arr
+(define (expval->array val)
+  (pmatch val
+    ((array-val ,a) a)
+    (? (report-expval-extractor-error 'array val))))
 
 ;; expval->proc+is-ref : Exp-val -> Proc x Bool
 (define (expval->proc+is-ref val)
@@ -79,6 +92,33 @@
 
 ;; the-unspecified-value : Exp-val
 (define the-unspecified-value '(num-val 27))
+
+;;;; Arrays
+
+;; make-array : Nat x Exp-val -> Arr
+(define (make-array len val)
+  `(array ,(alloc-array len val) ,len))
+
+;; array-ref : Arr x Nat -> Ref
+;; Note that this just returns the location.
+(define (array-ref arr k)
+  (pmatch arr
+    ((array ,base ,len)
+     (if (< k len)
+         (+ base k)
+         (report-bounds-error k)))))
+
+;; array-set! : Arr x Nat x Exp-val -> Unspecified
+(define (array-set! arr k val)
+  (pmatch arr
+    ((array ,base ,len)
+     (if (< k len)
+         (setref! (+ base k) val)
+         (report-bounds-error k)))))
+
+;; report-bounds-error : Nat -> ()
+(define (report-bounds-error k)
+  (error 'array-ref "array index out of bounds" k))
 
 ;;;; Procedures
 
@@ -217,12 +257,30 @@
     ((letref-exp ,var ,exp1 ,body)
      (let ((val (value-of-ref-operand exp1 env)))
        (value-of body (extend-env1 var val env))))
+    ((newarray-exp ,le ,exp1)
+     (let ((len (expval->num (value-of le env)))
+           (val (value-of exp1 env)))
+       `(array-val ,(make-array len val))))
+    ((arrayref-exp ,arr ,addr)
+     (let ((array1 (expval->array (value-of arr env)))
+           (k (expval->num (value-of addr env))))
+       (deref (array-ref array1 k))))
+    ((arrayset-exp ,arr ,addr ,exp1)
+     (let ((array1 (expval->array (value-of arr env)))
+           (k (expval->num (value-of addr env)))
+           (val (value-of exp1 env)))
+       (array-set! array1 k val)
+       the-unspecified-value))
     (? (error 'value-of "invalid expression" exp))))
 
 ;; value-of-ref-operand : Exp x Env -> Ref
 (define (value-of-ref-operand exp env)
   (pmatch exp
     ((var-exp ,var) (apply-env env var))
+    ((arrayref-exp ,arr ,addr)
+     (let ((array1 (expval->array (value-of arr env)))
+           (k (expval->num (value-of addr env))))
+       (array-ref array1 k)))
     (? (newref (value-of exp env)))))
 
 ;; value-of-ref-operands : List-of(Exp) x Env -> List-of(Ref)
@@ -270,6 +328,10 @@
     ((begin . ,es) `(begin-exp ,(map parse es)))
     ((letref ,v = ,e in ,body) (guard (symbol? v))
      `(letref-exp ,v ,(parse e) ,(parse body)))
+    ((newarray ,le ,ve) `(newarray-exp ,(parse le) ,(parse ve)))
+    ((arrayref ,a ,k) `(arrayref-exp ,(parse a) ,(parse k)))
+    ((arrayset ,a ,k ,e)
+     `(arrayset-exp ,(parse a) ,(parse k) ,(parse e)))
     ((,et . ,ens) `(call-exp ,(parse et) ,(map parse ens)))
     (? (error 'parse "invalid syntax" sexp))))
 
@@ -376,4 +438,24 @@
            '(let a = 5 in
               (let f = (valproc (x) (set x 3)) in
                 (begin (f a) a)))))
+
+  ;; Call-by-ref. arrays
+
+  (test 5 (eval-to-num '(let a = (newarray 4 5) in (arrayref a 0))))
+  (test 3 (eval-to-num
+           '(let a = (newarray 4 5) in
+              (begin (arrayset a 2 3) (arrayref a 2)))))
+  (test 3 (eval-to-num
+           '(let a = (newarray 4 5) in
+              (let f = (refproc (x) (set x 3)) in
+                (begin (f (arrayref a 0)) (arrayref a 0))))))
+  (test 3 (eval-to-num
+           '(let a = (newarray 4 5) in
+              (let swap = (refproc (x) (refproc (y)
+                            (let temp = x in
+                              (begin (set x y)
+                                     (set y temp)))))
+              in (begin (arrayset a 3 3)
+                        ((swap (arrayref a 0)) (arrayref a 3))
+                        (arrayref a 0))))))
   )
