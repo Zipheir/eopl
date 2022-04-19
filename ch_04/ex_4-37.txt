@@ -1,0 +1,60 @@
+# Exercise 4.37
+
+Call-by-value-result.  Here, argument are passed by value, but
+whatever ends up in the location denoted by the formal parameter
+gets copied into that of the actual parameter.  The result is
+similar to call-by-reference, so most of the call-by-reference
+examples also work under call-by-value-result.
+
+The text says that "the actual parameter must be a variable", and
+this will simplify things.
+
+Here's my first attempt at the implementation.  It works fine until
+you try to write a nested procedure like 'swap' that relies on
+call-by-reference-style mutation.
+
+As in CALL-BY-REFERENCE, I use a special value-of-operand procedure
+to pass references to apply-procedure; the only difference from that
+language is that value-of-operand *only* accepts var-exps as
+operand expressions.
+
+;; apply-procedure : Proc x Ref -> Exp-val
+(define (apply-procedure proc1 ref)
+  (cases proc proc1
+    (procedure (var body saved-env)
+      (let* ((local (newref (deref ref)))
+             (ext-env (extend-env var local saved-env))
+             (res (value-of body ext-env)))
+        (setref! ref (deref local))  ; copy new value
+        res))))
+
+See src/call-by-value-res.scm for the rest.
+
+With this change, expressions like
+
+let y = 0
+in let f = proc (x) (set x 5)
+   in begin (f y) y end
+
+give the correct result.  However, nested procedures don't:
+
+let x = 1
+in let y = 5
+   in let foo = proc (a) proc (b)
+                  set(a, b)
+      in begin ((foo x) y) x end
+% => 1
+
+Revealingly, this works:
+
+let x = 1
+in let y = 5
+   in let foo = proc (a) proc (b)
+                  set(b, a)
+      in begin ((foo y) x) x end
+% => 5
+
+Clearly, modifications to the outer parameter are lost, while
+those affecting the innermost parameter are correctly copied out.
+I'm not 100% clear on the details, and a solution seems difficult.
+More thinking is needed.
