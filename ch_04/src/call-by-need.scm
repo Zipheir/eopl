@@ -206,9 +206,6 @@
          (w (deref ref1)))
     (pmatch w
       ((thunk ,exp1 ,senv)
-       (display "forcing thunk at address ")
-       (display ref1)
-       (newline)
        (let ((val1 (value-of exp1 senv)))
          (setref! ref1 val1)   ; memoize
          val1))
