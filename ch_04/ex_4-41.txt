@@ -1,0 +1,37 @@
+# Exercise 4.41
+
+The specification for the CALL-BY-NAME language differs from that
+of IMPLICIT-REFS in the following rules:
+
+     (value-of rator ρ σ₀) = (proc, σ₁)
+---------------------------------------------- call
+ (value-of (call-exp rator rand) ρ σ₀) =
+   (apply-procedure proc (a-thunk rand ρ) σ₁)
+
+Thunks:
+
+----------------------------------------------------------- force
+ (value-of-thunk (a-thunk exp₁ ρ) σ) = (value-of exp₁ ρ σ)
+
+There are two rules for evaluating variable expressions:
+
+           σ(ρ(var)) ∈ Exp-val
+------------------------------------------ var-immediate
+ (value-of (var-exp var) ρ σ) = σ(ρ(var))
+
+
+                   σ(ρ(var)) = t ∈ Thunk
+------------------------------------------------------- var-force
+ (value-of (var-exp var) ρ σ) = (value-of-thunk t ρ σ)
+
+This last rule is more complex in CALL-BY-NEED:
+
+                  σ(ρ(var)) = t ∈ Thunk
+           (value-of-thunk t ρ σ₀) = (val, σ₁)
+--------------------------------------------------------- var-force
+ (value-of (var-exp var) ρ σ₀) = (val, [ρ(var) = val]σ₁)
+
+In both specifications, the difficulty of dealing with effects in a
+lazy context is apparent.  When evaluating a call, only the effects
+of the *rator* expression occur; those of *rand* occur only when the
+thunk created during the call is forced.
