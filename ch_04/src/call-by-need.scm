@@ -182,9 +182,8 @@
            (value-of con env)
            (value-of alt env))))
     ((let-exp ,var ,exp1 ,body)
-     (let ((val (value-of exp1 env)))
-       (value-of body
-                 (extend-env var (newref val) env))))
+     (let ((val (value-of-operand exp1 env)))
+       (value-of body (extend-env var val env))))
     ((proc-exp ,var ,body)
      `(proc-val ,(procedure var body env)))
     ((call-exp ,rator ,rand)
