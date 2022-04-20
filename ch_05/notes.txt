@@ -1,0 +1,85 @@
+# Chapter 5: Continuation-passing interpreters
+
+Earlier chapters reified the data contexts of a computation as
+environments; this chapter reifies *control* contexts as continuations.
+
+A computation exhibits *recursive control behavior* when it accumulates
+control information recursively, e.g. as a recursive procedure does on
+each nested call.
+
+A computation which always accumulates a bounded amount of control
+information is said to exhibit *iterative control behavior*.
+
+The principle of the control behavior of procedures:
+
+> It is evaluation of operands, not the calling of procedures,
+> that makes the control context grow.
+
+The interpreters of this chapter will take explicit continuation
+arguments which will let us play with control contexts directly.
+
+## 5.1
+
+The basis for the first CPS interpreter will be the language LETREC
+from section 3.4.  In the new interpreter, no call to value-of will
+build control context (compare the heavily-nested evaluations of all
+of the earlier interpreters).
+
+"What does a continuation represent?  The continuation of an
+expression represents a procedure that takes the result of the
+expression and completes the computation." (p. 141)
+
+An interpreter will produces a "final answer":
+
+Final-answer = Exp-val
+
+apply-cont : Cont × Exp-val → Final-answer
+
+This is "final" in the sense that the result of apply-cont will not
+be used by any other part of the program being evaluated.
+
+The continuation constructors are described in terms of apply-cont.
+The most "final" continuation is constructed with 'end-cont':
+
+(apply-cont (end-cont) val) =
+  (begin (display "End of computation.\n")
+         val)
+
+The evaluation of a correct program will invoke an ending continuation
+exactly once.  The main entry point of the interpreter passes an
+ending continuation as the initial one:
+
+;; value-of-program : Program → Final-answer
+(define (value-of-program pgm)
+  (cases program pgm
+    (a-program (exp₁)
+      (value-of/k exp₁ (init-env) (end-cont)))))
+
+See src/letrec-cont.scm for the whole intepreter.
+
+Perhaps surprisingly, letrec expressions are very simple,
+control-wise.  Since they evaluate to their bodies, the control
+context doesn't change.
+
+General principle (p. 144):
+
+> Tail Calls Don't Grow the Continuation
+>
+> If the value of exp₁ is returned as the value of exp₂, then
+> exp₁ and exp₂ should run in the same continuation.
+
+zero? expressions use a new kind of continuation:
+
+; ...
+(zero?-exp (exp₁)
+  (value-of/k exp₁ env (zero1-cont cont)))
+
+where (zero1-cont k) is specified by
+
+(apply-cont (zero1-cont k) val) =
+  (apply-cont k (bool-val (zero? (expval->num val))))
+
+The treatment of the other forms is analogous.  In each case, the
+evaluation is "unnested", and a specially-crafted continuation
+replaces the computation that would be performed on the bound values
+of the subexpressions.
