@@ -214,6 +214,9 @@
 ;; value-of-operand : Exp x Env -> Ref
 (define (value-of-operand exp env)
   (pmatch exp
+    ((const-exp ,n) (newref `(num-val ,n)))
+    ((proc-exp ,var ,body)
+     (newref `(proc-val ,(procedure var body env))))
     ((var-exp ,var) (apply-env env var))
     (? (newref `(thunk ,exp ,env)))))
 
