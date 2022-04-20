@@ -1,0 +1,10 @@
+# Exercise 4.42
+
+This adds a lazy 'let' form to CALL-BY-NEED.  Rather than adding yet
+another form, I'm going to modify the existing 'let'.  Here's the
+spec.:
+
+                    l ∉ dom σ
+----------------------------------------------------- let
+(value-of (let-exp var exp₁ body) ρ σ) =
+  (value-of body [var = l]ρ [l = (a-thunk exp₁ ρ)]σ)
