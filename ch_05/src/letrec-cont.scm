@@ -112,6 +112,14 @@
      (value-of/k rand env `(rand-cont ,val ,env ,k)))
     ((rand-cont ,vrat ,env ,k)
      (apply-procedure/k (expval->proc vrat) val k))
+    ((let2-exp1-cont ,var1 ,var2 ,exp2 ,body ,env ,k)
+     (value-of/k exp2
+                 env
+                 `(let2-exp2-cont ,var1 ,val ,var2 ,body ,env ,k)))
+    ((let2-exp2-cont ,var1 ,val1 ,var2 ,body ,env ,k)
+     (value-of/k body
+                 (extend-env var1 val1 (extend-env var2 val env))
+                 k))
     (? (error 'apply-cont "invalid continuation" cont))))
 
 ;;;; Interpreter
@@ -136,6 +144,10 @@
      (value-of/k exp1 env `(if-test-cont ,exp2 ,exp3 ,env ,cont)))
     ((let-exp ,var ,exp1 ,body)
      (value-of/k exp1 env `(let-exp-cont ,var ,body ,env ,cont)))
+    ((let2-exp ,var1 ,exp1 ,var2 ,exp2 ,body)
+     (value-of/k exp1
+                 env
+                 `(let2-exp1-cont ,var1 ,var2 ,exp2 ,body ,env ,cont)))
     ((letrec-exp ,p-name ,b-var ,p-body ,lr-body)
      (value-of/k lr-body
                  (extend-env-rec p-name b-var p-body env)
@@ -155,6 +167,9 @@
     (,v (guard (symbol? v)) `(var-exp ,v))
     ((let ,v = ,s in ,b) (guard (symbol? v))
      `(let-exp ,v ,(parse s) ,(parse b)))
+    ((let2 ,v1 = ,e1 and ,v2 = ,e2 in ,b)
+     (guard (symbol? v1) (symbol? v2))
+     `(let2-exp ,v1 ,(parse e1) ,v2 ,(parse e2) ,(parse b)))
     ((proc (,v) ,body) (guard (symbol? v))
      `(proc-exp ,v ,(parse body)))
     ((letrec ,f (,v) = ,e in ,body)
@@ -189,4 +204,11 @@
            '(let add1 = (proc (b) (- b (- 0 1))) in
               (letrec f (a) = (if (zero? a) 0 (add1 (f (- a 1))))
                in (f 5)))))
+
+  (test 5 (eval-to-num '(let2 a = 7 and b = 12 in (- b a))))
+  (test 5 (eval-to-num  ; let2 scope test
+           '(let f = (proc (x) (- x 1)) in
+              (let2 f = (proc (x) 0) and
+                    g = (proc (x) (f x)) in
+                (g 6)))))
   )
