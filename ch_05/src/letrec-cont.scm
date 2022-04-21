@@ -88,58 +88,31 @@
 
 ;;;; Continuations
 
-;;; Procedural representation:
-;;; Cont = Exp-val -> Final-answer
-
-;; end-cont : Bool -> Cont
-(define (end-cont print-msg)
-  (lambda (val)  ; the final answer
-    (when print-msg (display "End of computation.\n"))
-    val))
-
-;; zero1-cont : Cont -> Cont
-(define (zero1-cont cont)
-  (lambda (val)  ; value of num. expression
-    (apply-cont cont `(bool-val ,(zero? (expval->num val))))))
-
-;; if-test-cont : Exp x Exp x Env x Cont -> Cont
-(define (if-test-cont exp2 exp3 env cont)
-  (lambda (val)  ; value of test expression
-    (if (expval->bool val)
-        (value-of/k exp2 env cont)
-        (value-of/k exp3 env cont))))
-
-;; let-exp-cont : Var x Exp x Env x Cont -> Cont
-(define (let-exp-cont var body env cont)
-  (lambda (val)  ; value for var binding
-    (value-of/k body
-                (extend-env var val env)
-                cont)))
-
-;; diff1-cont : Exp x Env x Cont -> Cont
-(define (diff1-cont exp2 env cont)
-  (lambda (val1)
-    (value-of/k exp2 env (diff2-cont val1 env cont))))
-
-;; diff2-cont : Val x Env x Cont -> Cont
-(define (diff2-cont val1 env cont)
-  (lambda (val2)
-    (apply-cont cont
-                `(num-val ,(- (expval->num val1)
-                              (expval->num val2))))))
-
-;; rator-cont : Exp x Env x Cont -> Cont
-(define (rator-cont rand env cont)
-  (lambda (vrat)  ; operator
-    (value-of/k rand env (rand-cont vrat env cont))))
-
-;; rand-cont : Val x Env x Cont -> Cont
-(define (rand-cont vrat env cont)
-  (lambda (vrand)
-    (apply-procedure/k (expval->proc vrat) vrand cont)))
-
 ;; apply-cont : Cont x Val -> Final-answer
-(define (apply-cont cont val) (cont val))
+(define (apply-cont cont val)
+  (pmatch cont
+    ((end-cont ,print-msg)
+     (when print-msg (display "End of computation.\n"))
+     val)
+    ((zero1-cont ,k)
+     (apply-cont k `(bool-val ,(zero? (expval->num val)))))
+    ((if-test-cont ,exp2 ,exp3 ,env ,k)
+     (if (expval->bool val)
+         (value-of/k exp2 env k)
+         (value-of/k exp3 env k)))
+    ((let-exp-cont ,var ,body ,env ,k)
+     (value-of/k body (extend-env var val env) k))
+    ((diff1-cont ,exp2 ,env ,k)
+     (value-of/k exp2 env `(diff2-cont ,val ,env ,k)))
+    ((diff2-cont ,val1 ,env ,k)
+     (let ((num1 (expval->num val1))
+           (num2 (expval->num val)))
+       (apply-cont k `(num-val ,(- num1 num2)))))
+    ((rator-cont ,rand ,env ,k)
+     (value-of/k rand env `(rand-cont ,val ,env ,k)))
+    ((rand-cont ,vrat ,env ,k)
+     (apply-procedure/k (expval->proc vrat) val k))
+    (? (error 'apply-cont "invalid continuation" cont))))
 
 ;;;; Interpreter
 
@@ -147,7 +120,7 @@
 (define (value-of-program pgm print-msg)
   (pmatch pgm
     ((program ,exp1)
-     (value-of/k exp1 (init-env) (end-cont print-msg)))))
+     (value-of/k exp1 (init-env) `(end-cont ,print-msg)))))
 
 ;; value-of/k : Exp x Env x Cont -> Final-answer
 (define (value-of/k exp env cont)
@@ -156,19 +129,19 @@
     ((var-exp ,var) (apply-cont cont (apply-env env var)))
     ((proc-exp ,var ,body)
      (apply-cont cont `(proc-val ,(procedure var body env))))
-    ((zero?-exp ,exp1) (value-of/k exp1 env (zero1-cont cont)))
+    ((zero?-exp ,exp1) (value-of/k exp1 env `(zero1-cont ,cont)))
     ((diff-exp ,exp1 ,exp2)
-     (value-of/k exp1 env (diff1-cont exp2 env cont)))
+     (value-of/k exp1 env `(diff1-cont ,exp2 ,env ,cont)))
     ((if-exp ,exp1 ,exp2 ,exp3)
-     (value-of/k exp1 env (if-test-cont exp2 exp3 env cont)))
+     (value-of/k exp1 env `(if-test-cont ,exp2 ,exp3 ,env ,cont)))
     ((let-exp ,var ,exp1 ,body)
-     (value-of/k exp1 env (let-exp-cont var body env cont)))
+     (value-of/k exp1 env `(let-exp-cont ,var ,body ,env ,cont)))
     ((letrec-exp ,p-name ,b-var ,p-body ,lr-body)
      (value-of/k lr-body
                  (extend-env-rec p-name b-var p-body env)
                  cont))
     ((call-exp ,rator ,rand)
-     (value-of/k rator env (rator-cont rand env cont)))
+     (value-of/k rator env `(rator-cont ,rand ,env ,cont)))
     (? (error 'value-of/k "invalid expression" exp))))
 
 ;; Parser for a simple S-exp representation.
