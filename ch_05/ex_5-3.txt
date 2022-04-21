@@ -1,0 +1,30 @@
+# Exercise 5.3
+
+This adds a let2 form (a let that binds exactly two variables) to
+the CPS LETREC interpreter.
+
+Expression ::= ...
+               [let2-exp var1 exp1 var2 exp2 body]
+
+Here's the spec., using the text's datatype framework:
+
+; (value-of/k exp env cont) ...
+(let2-exp (var1 exp1 var2 exp2 body)
+  (value-of/k exp1
+              env
+              (let2-exp1-cont var1 var2 exp2 body env cont)))
+
+There are two new continuations with the following specs:
+
+(apply-cont (let2-exp1-cont var1 var2 exp2 body env cont) val1)
+  = (value-of/k exp2
+                env
+                (let2-exp2-cont var1 val1 var2 body env cont))
+
+(apply-cont (let2-exp2-cont var1 val1 var2 body env cont) val2)
+  = (value-of/k body
+                (extend-env var2 val2 (extend-env var1 val1 env))
+                cont)
+
+Note that both binding values are evaluated in the same environment,
+but in different continuations.
