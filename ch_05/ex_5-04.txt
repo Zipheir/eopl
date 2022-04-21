@@ -1,0 +1,19 @@
+# Exercise 5.4
+
+let3 is very much like let2 with an additional evaluation
+continuation for the third binding.  This continuation has the
+following spec.:
+
+(apply-cont (let3-exp3-cont var1 val1 var2 val2 var3 body env cont)
+            val3)
+  = (value-of/k body
+                (extend-env var3
+                            val3
+                            (extend-env var2
+                                        val2
+                                        (extend-env var1
+                                                    val1
+                                                    env)))
+                cont)
+
+Clearly this form is a bit ungainly.
