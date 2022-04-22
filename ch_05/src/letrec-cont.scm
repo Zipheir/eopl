@@ -26,6 +26,12 @@
     ((proc-val ,p) p)
     (? (report-expval-extractor-error 'proc val))))
 
+;; expval->list : Exp-val -> List
+(define (expval->list val)
+  (pmatch val
+    ((list-val ,l) l)
+    (? (report-expval-extractor-error 'list val))))
+
 (define (report-expval-extractor-error variant value)
   (error 'expval-extractors
          "unexpected type found"
@@ -120,6 +126,15 @@
      (value-of/k body
                  (extend-env var1 val1 (extend-env var2 val env))
                  k))
+    ((cons-car-cont ,dexp ,env ,k)
+     (value-of/k dexp env `(cons-cdr-cont ,val ,env ,k)))
+    ((cons-cdr-cont ,car-val ,env ,k)
+     (apply-cont k `(list-val ,(cons car-val (expval->list val)))))
+    ((car1-cont ,k) (apply-cont k (car (expval->list val))))
+    ((cdr1-cont ,k)
+     (apply-cont k `(list-val ,(cdr (expval->list val)))))
+    ((null1-cont ,k)
+     (apply-cont k `(bool-val ,(null? (expval->list val)))))
     (? (error 'apply-cont "invalid continuation" cont))))
 
 ;;;; Interpreter
@@ -154,6 +169,12 @@
                  cont))
     ((call-exp ,rator ,rand)
      (value-of/k rator env `(rator-cont ,rand ,env ,cont)))
+    ((emptylist-exp) (apply-cont cont '(list-val ())))
+    ((cons-exp ,aexp ,dexp)
+     (value-of/k aexp env `(cons-car-cont ,dexp ,env ,cont)))
+    ((car-exp ,lexp) (value-of/k lexp env `(car1-cont ,cont)))
+    ((cdr-exp ,lexp) (value-of/k lexp env `(cdr1-cont ,cont)))
+    ((null?-exp ,exp1) (value-of/k exp1 env `(null1-cont ,cont)))
     (? (error 'value-of/k "invalid expression" exp))))
 
 ;; Parser for a simple S-exp representation.
@@ -161,6 +182,7 @@
 (define (parse sexp)
   (pmatch sexp
     (,n (guard (number? n)) `(const-exp ,n))
+    (emptylist '(emptylist-exp))
     ((- ,s ,t) `(diff-exp ,(parse s) ,(parse t)))
     ((zero? ,s) `(zero?-exp ,(parse s)))
     ((if ,t ,c ,a) `(if-exp ,(parse t) ,(parse c) ,(parse a)))
@@ -175,6 +197,10 @@
     ((letrec ,f (,v) = ,e in ,body)
      (guard (symbol? f) (symbol? v))
      `(letrec-exp ,f ,v ,(parse e) ,(parse body)))
+    ((cons ,a ,d) `(cons-exp ,(parse a) ,(parse d)))
+    ((car ,l) `(car-exp ,(parse l)))
+    ((cdr ,l) `(cdr-exp ,(parse l)))
+    ((null? ,e) `(null?-exp ,(parse e)))
     ((,e1 ,e2) `(call-exp ,(parse e1) ,(parse e2)))
     (? (error 'parse "invalid syntax" sexp))))
 
@@ -191,6 +217,9 @@
 (define (run-tests)
   (define (eval-to-num exp)
     (expval->num (run exp #f)))
+
+  (define (eval-to-num-list exp)
+    (map expval->num (expval->list (run exp #f))))
 
   (test 5 (eval-to-num '5))
   (test 5 (eval-to-num 'v))
@@ -211,4 +240,15 @@
               (let2 f = (proc (x) 0) and
                     g = (proc (x) (f x)) in
                 (g 6)))))
+
+  ;;; Lists
+
+  (test '() (eval-to-num-list 'emptylist))
+  (test '(1) (eval-to-num-list '(cons 1 emptylist)))
+  (test '(1 2 3) (eval-to-num-list '(cons 1 (cons 2 (cons 3 emptylist)))))
+  (test 1 (eval-to-num '(car (cons 1 emptylist))))
+  (test '(2 3) (eval-to-num-list
+                '(cdr (cons 1 (cons 2 (cons 3 emptylist))))))
+  (test 1 (eval-to-num '(if (null? emptylist) 1 0)))
+  (test 0 (eval-to-num '(if (null? (cons 1 emptylist)) 1 0)))
   )
