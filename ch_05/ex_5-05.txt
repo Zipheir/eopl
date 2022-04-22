@@ -1,0 +1,25 @@
+# Exercise 5.5
+
+Lists for the CPS LETREC interpreter.  The operations are all familiar,
+and their translations to CPS are pretty obvious.  Lists are
+represented internally as List-of(Exp-val) values.
+
+cons is the only one complex enough to bother describing here; for the
+rest, see src/letrec-cont.scm.
+
+;; (value-of/k exp env cont) ...
+(cons-exp (car-exp cdr-exp)
+  (value-of/k car-exp env (cons-car-cont cdr-exp env cont)))
+
+The continuations:
+
+;; cons-car-cont
+(apply-cont (cons-car-cont cdr-exp env cont) val)
+  = (value-of/k cdr-exp env (cons-cdr-cont val cont))
+
+;; cons-cdr-cont
+(apply-cont (cons-cdr-cont car-val cont) val)
+  = (apply-cont cont (list-val (cons car-val (expval->list val))))
+
+Note that the environment is not needed to actually build the list,
+so it's dropped from the cdr continuation.
