@@ -135,6 +135,10 @@
      (apply-cont k `(list-val ,(cdr (expval->list val)))))
     ((null1-cont ,k)
      (apply-cont k `(bool-val ,(null? (expval->list val)))))
+    ((evlis-continue-cont ,exps ,env ,k)
+     (eval-list/k exps env `(evlis-collect-cont ,val ,k)))
+    ((evlis-collect-cont ,car-val ,k)
+     (apply-cont k (cons car-val val)))
     (? (error 'apply-cont "invalid continuation" cont))))
 
 ;;;; Interpreter
@@ -175,7 +179,18 @@
     ((car-exp ,lexp) (value-of/k lexp env `(car1-cont ,cont)))
     ((cdr-exp ,lexp) (value-of/k lexp env `(cdr1-cont ,cont)))
     ((null?-exp ,exp1) (value-of/k exp1 env `(null1-cont ,cont)))
+    ((list-exp ,exps) `(list-val ,(eval-list/k exps env cont)))
     (? (error 'value-of/k "invalid expression" exp))))
+
+;; eval-list/k : List-of(Exp) x Env x Cont -> Final-answer
+;;
+;; Usage: Evaluates a list of expressions in env and delivers
+;; the list of results to cont.
+(define (eval-list/k exps env cont)
+  (pmatch exps
+    (() (apply-cont cont '()))
+    ((,e . ,es)
+     (value-of/k e env `(evlis-continue-cont ,es ,env ,cont)))))
 
 ;; Parser for a simple S-exp representation.
 ;; parse : List -> Exp
@@ -201,6 +216,7 @@
     ((car ,l) `(car-exp ,(parse l)))
     ((cdr ,l) `(cdr-exp ,(parse l)))
     ((null? ,e) `(null?-exp ,(parse e)))
+    ((list . ,es) `(list-exp ,(map parse es)))
     ((,e1 ,e2) `(call-exp ,(parse e1) ,(parse e2)))
     (? (error 'parse "invalid syntax" sexp))))
 
@@ -251,4 +267,7 @@
                 '(cdr (cons 1 (cons 2 (cons 3 emptylist))))))
   (test 1 (eval-to-num '(if (null? emptylist) 1 0)))
   (test 0 (eval-to-num '(if (null? (cons 1 emptylist)) 1 0)))
+  (test '() (eval-to-num-list '(list)))
+  (test '(1 2 3) (eval-to-num-list '(list 1 2 3)))
+  (test '(1 5 10) (eval-to-num-list '(list i v x)))
   )
