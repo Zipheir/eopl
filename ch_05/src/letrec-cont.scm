@@ -94,7 +94,7 @@
 
 ;;;; Continuations
 
-;; apply-cont : Cont x Val -> Final-answer
+;; apply-cont : Cont x (Val + List-of(Val)) -> Final-answer
 (define (apply-cont cont val)
   (pmatch cont
     ((end-cont ,print-msg)

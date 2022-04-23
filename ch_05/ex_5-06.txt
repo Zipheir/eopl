@@ -29,6 +29,10 @@ The continuations:
 (apply-cont (evlis-collect-cont car-val k) cdr-val)
   = (apply-cont k (cons car-val cdr-val))
 
+Note that cdr-val is of type List-of(Val), so the type of apply-cont
+has to be relaxed.  This beats wrapping and unwrapping the value list
+n times, however.
+
 With this in place, the rest of 'list' is easy:
 
 ;; (value-of/k exp env cont)
