@@ -1,0 +1,35 @@
+# Exercise 5.6
+
+Now things get more interesting.  Here I want to implement a
+variadic procedure, 'list'.  A list expression is represented
+as it was in ch. 3:
+
+Expression ::= ...
+               [list-exp (exps)]
+
+Each element of the *exps* list of expressions must be evaluated
+and list of the results must be passed to the original continuation
+of the 'list' expression.
+
+The core of this problem is how to evaluate a list of expressions
+in a CPS interpreter.  Here it is:
+
+(define (eval-list/k exps env cont)
+  (if (null? exps)
+      (apply-cont '())
+      (value-of/k (car exp)
+                  env
+                  (evlis-continue-cont (cdr exps) env cont))))
+
+The continuations:
+
+(apply-cont (evlis-continue-cont exps env k) val)
+  = (eval-list/k exps env (evlis-collect-cont val k)))
+
+(apply-cont (evlis-collect-cont car-val k) cdr-val)
+  = (apply-cont k (cons car-val cdr-val))
+
+With this in place, the rest of 'list' is easy:
+
+;; (value-of/k exp env cont)
+(list-exp (exps) (list-val (eval-list/k exps env cont)))
