@@ -46,32 +46,56 @@
 (define (apply-procedure/k proc1 val cont)
   (pmatch proc1
     ((proc ,var ,body ,env)
-     (value-of/k body (extend-env var val env) cont))))
+     (value-of/k body (extend-env1 var val env) cont))))
 
 ;;;; Environments
 
 ;; empty-env : () -> Env
 (define (empty-env) '())
 
-;; extend-env : Var x Exp-val x Env -> Env
-(define (extend-env var val env)
-  (cons (list 'ext var val) env))
+;; extend-env : List-of(Var) x List-of(Exp-val) x Env -> Env
+(define (extend-env vars vals env)
+  (cons (list 'ext vars vals) env))
 
-;; extend-env-rec : Var x Var x Exp-val x Env -> Env
-(define (extend-env-rec p-name b-var p-body env)
-  (cons (list 'ext-rec p-name b-var p-body) env))
+(define (extend-env1 var val env)
+  (extend-env (list var) (list val) env))
+
+;; extend-env-rec : List-of(Var) x List-of(Var) x List-of(Exp-val)
+;;                  x Env -> Env
+(define (extend-env-rec p-names b-vars p-bodies env)
+  (cons (list 'ext-rec p-names b-vars p-bodies) env))
 
 ;; apply-env : Env x Var -> Scheme-val
 (define (apply-env env search-var)
   (pmatch env
     (() (report-no-binding-found search-var))
-    (((ext ,var ,val) . ,env*)
-     (if (eqv? search-var var) val (apply-env env* search-var)))
-    (((ext-rec ,p-name ,b-var ,p-body) . ,env*)
-     (if (eqv? search-var p-name)
-         (list 'proc-val (procedure b-var p-body env))
-         (apply-env env* search-var)))
+    (((ext ,vars ,vals) . ,env*)
+     (cond ((location search-var vars) => (lambda (n)
+                                            (list-ref vals n)))
+           (else (apply-env env* search-var))))
+    (((ext-rec ,p-names ,b-vars ,p-bodies) . ,env*)
+     (cond ((location search-var p-names) =>
+            (lambda (n)
+              (list 'proc-val
+                    (procedure (list-ref b-vars n)
+                               (list-ref p-bodies n)
+                               env))))
+           (else (apply-env env* search-var))))
     (? (error 'apply-env "invalid environment" env))))
+
+;; location : Var x List-of(Var) -> Nat + False
+(define (location var vs)
+  (letrec
+    ((index-of
+      (lambda (vs k)
+        (pmatch vs
+          (() #f)
+          ((,v . ,vs*)
+           (if (eqv? v var)
+               k
+               (index-of vs* (+ k 1))))))))
+
+    (index-of vs 0)))
 
 (define (report-no-binding-found var)
   (error 'apply-env "no binding found" var))
@@ -79,10 +103,7 @@
 ;; alist->env : List-of(Var x Scheme-val) -> Env
 ;; No recursive bindings.
 (define (alist->env as)
-  (fold-right (lambda (p env)
-                (extend-env (car p) (cdr p) env))
-              (empty-env)
-              as))
+  (extend-env (map car as) (map cdr as) (empty-env)))
 
 ;;; Initial environment
 
@@ -106,8 +127,8 @@
      (if (expval->bool val)
          (value-of/k exp2 env k)
          (value-of/k exp3 env k)))
-    ((let-exp-cont ,var ,body ,env ,k)
-     (value-of/k body (extend-env var val env) k))
+    ((let-exps-cont ,vars ,body ,env ,k)
+     (value-of/k body (extend-env vars val env) k))
     ((diff1-cont ,exp2 ,env ,k)
      (value-of/k exp2 env `(diff2-cont ,val ,env ,k)))
     ((diff2-cont ,val1 ,env ,k)
@@ -118,14 +139,6 @@
      (value-of/k rand env `(rand-cont ,val ,env ,k)))
     ((rand-cont ,vrat ,env ,k)
      (apply-procedure/k (expval->proc vrat) val k))
-    ((let2-exp1-cont ,var1 ,var2 ,exp2 ,body ,env ,k)
-     (value-of/k exp2
-                 env
-                 `(let2-exp2-cont ,var1 ,val ,var2 ,body ,env ,k)))
-    ((let2-exp2-cont ,var1 ,val1 ,var2 ,body ,env ,k)
-     (value-of/k body
-                 (extend-env var1 val1 (extend-env var2 val env))
-                 k))
     ((cons-car-cont ,dexp ,env ,k)
      (value-of/k dexp env `(cons-cdr-cont ,val ,k)))
     ((cons-cdr-cont ,car-val ,k)
@@ -161,15 +174,11 @@
      (value-of/k exp1 env `(diff1-cont ,exp2 ,env ,cont)))
     ((if-exp ,exp1 ,exp2 ,exp3)
      (value-of/k exp1 env `(if-test-cont ,exp2 ,exp3 ,env ,cont)))
-    ((let-exp ,var ,exp1 ,body)
-     (value-of/k exp1 env `(let-exp-cont ,var ,body ,env ,cont)))
-    ((let2-exp ,var1 ,exp1 ,var2 ,exp2 ,body)
-     (value-of/k exp1
-                 env
-                 `(let2-exp1-cont ,var1 ,var2 ,exp2 ,body ,env ,cont)))
-    ((letrec-exp ,p-name ,b-var ,p-body ,lr-body)
+    ((let-exp ,vars ,exps ,body)
+     (eval-list/k exps env `(let-exps-cont ,vars ,body ,env ,cont)))
+    ((letrec-exp ,p-names ,b-vars ,p-bodies ,lr-body)
      (value-of/k lr-body
-                 (extend-env-rec p-name b-var p-body env)
+                 (extend-env-rec p-names b-vars p-bodies env)
                  cont))
     ((call-exp ,rator ,rand)
      (value-of/k rator env `(rator-cont ,rand ,env ,cont)))
@@ -202,16 +211,10 @@
     ((zero? ,s) `(zero?-exp ,(parse s)))
     ((if ,t ,c ,a) `(if-exp ,(parse t) ,(parse c) ,(parse a)))
     (,v (guard (symbol? v)) `(var-exp ,v))
-    ((let ,v = ,s in ,b) (guard (symbol? v))
-     `(let-exp ,v ,(parse s) ,(parse b)))
-    ((let2 ,v1 = ,e1 and ,v2 = ,e2 in ,b)
-     (guard (symbol? v1) (symbol? v2))
-     `(let2-exp ,v1 ,(parse e1) ,v2 ,(parse e2) ,(parse b)))
+    ((let ,bs in ,b) (parse-let-exp bs b))
     ((proc (,v) ,body) (guard (symbol? v))
      `(proc-exp ,v ,(parse body)))
-    ((letrec ,f (,v) = ,e in ,body)
-     (guard (symbol? f) (symbol? v))
-     `(letrec-exp ,f ,v ,(parse e) ,(parse body)))
+    ((letrec ,bs in ,body) (parse-letrec-exp bs body))
     ((cons ,a ,d) `(cons-exp ,(parse a) ,(parse d)))
     ((car ,l) `(car-exp ,(parse l)))
     ((cdr ,l) `(cdr-exp ,(parse l)))
@@ -219,6 +222,32 @@
     ((list . ,es) `(list-exp ,(map parse es)))
     ((,e1 ,e2) `(call-exp ,(parse e1) ,(parse e2)))
     (? (error 'parse "invalid syntax" sexp))))
+
+;; parse-let-exp : List x List -> Exp
+(define (parse-let-exp binds body)
+  (letrec
+    ((collect
+      (lambda (bs vars vals)
+        (pmatch bs
+          (() (values vars vals))
+          (((,v = ,e) . ,bs*) (guard (symbol? v))
+           (collect bs* (cons v vars) (cons (parse e) vals)))))))
+
+    (let-values (((vars vals) (collect binds '() '())))
+      `(let-exp ,vars ,vals ,(parse body)))))
+
+(define (parse-letrec-exp binds body)
+  (let* ((f (lambda args
+              (pmatch args
+                (((,g (,v) = ,e) (,names ,b-vars ,bodies))
+                 (guard (symbol? g) (symbol? v))
+                 `((,g . ,names)
+                   (,v . ,b-vars)
+                   (,(parse e) . ,bodies))))))
+         (ts (fold-right f '(() () ()) binds)))
+    (pmatch ts
+      ((,names ,vars ,bodies)
+       `(letrec-exp ,names ,vars ,bodies ,(parse body))))))
 
 ;; parse-program : List -> Program
 (define (parse-program sexp)
@@ -242,20 +271,23 @@
   (test 0 (eval-to-num '(if (zero? 2) 1 0)))
   (test 1 (eval-to-num '(if (zero? 0) 1 0)))
   (test 1 (eval-to-num '(- 3 2)))
-  (test 4 (eval-to-num '(let a = (- v i) in a)))
+  (test 4 (eval-to-num '(let ((a = (- v i))) in a)))
   (test 6 (eval-to-num
-           '(let add1 = (proc (a) (- a (- 0 1))) in (add1 v))))
+           '(let ((add1 = (proc (a) (- a (- 0 1))))) in (add1 v))))
   (test 5 (eval-to-num
-           '(let add1 = (proc (b) (- b (- 0 1))) in
-              (letrec f (a) = (if (zero? a) 0 (add1 (f (- a 1))))
+           '(let ((add1 = (proc (b) (- b (- 0 1))))) in
+              (letrec ((f (a) = (if (zero? a) 0 (add1 (f (- a 1))))))
                in (f 5)))))
-
-  (test 5 (eval-to-num '(let2 a = 7 and b = 12 in (- b a))))
-  (test 5 (eval-to-num  ; let2 scope test
-           '(let f = (proc (x) (- x 1)) in
-              (let2 f = (proc (x) 0) and
-                    g = (proc (x) (f x)) in
-                (g 6)))))
+  (test 5 (eval-to-num
+           '(let ((a = 8) (b = 1) (c = 2)) in (- (- a b) c))))
+  (test 1 (eval-to-num
+           '(letrec ((even (x) = (if (zero? x) 1 (odd (- x 1))))
+                     (odd (x) = (if (zero? x) 0 (even (- x 1)))))
+             in (even 4))))
+  (test 0 (eval-to-num
+           '(letrec ((even (x) = (if (zero? x) 1 (odd (- x 1))))
+                     (odd (x) = (if (zero? x) 0 (even (- x 1)))))
+             in (even 5))))
 
   ;;; Lists
 
