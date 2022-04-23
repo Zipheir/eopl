@@ -1,0 +1,26 @@
+# Exercise 5.7
+
+This one adds multi-binding let (and letrec) to the CPS LETREC
+interpreter.  As usual with these exercises, I'll switch the
+environment representation to the "ribcage" structure; thus,
+extend-env now takes a list of variables and a list of values.
+extend-env-rec is as it was in the Ch. 4 interpreters.
+
+I'll assume that the parser collects the variables and expressions
+of a let form into two lists.  Here's the value-of/k clause, which
+uses the eval-list/k procedure and its associated continuations from
+the last exercise:
+
+;; (value-of/k exp env cont)
+(let-exp (vars exps body)
+  (eval-list/k exps
+               env
+               (let-exps-cont vars body env cont)))
+
+The continuation is specified by:
+
+(apply-cont (let-exps-cont vars body env cont) vals)
+  = (value-of/k body (extend-env vars vals env) cont)
+
+Here, vals is of type List-of(Exp-val), so I'm once again using
+apply-cont to handle both values and lists of values.
