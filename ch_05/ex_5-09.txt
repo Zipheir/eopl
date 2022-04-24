@@ -1,0 +1,35 @@
+# Exercise 5.9
+
+This exercise adapts the CPS interpreter to implement the IMPLICIT-REFS
+language from Ch. 4.  A lot of the implementation is a matter of
+copying stuff from the old IMPLICIT-REFS interpreter, so I'll just
+discuss the changes relating to CPS and assume that the infrastructure
+is in place.  In particular, let's see how assignment expressions are
+implemented.
+
+Here's the rule for assignment from IMPLICIT-REFS:
+
+;; (value-of exp env)
+(assign-exp (var exp1)
+  (setref! (apply-env env var) (value-of exp1 env))
+  the-unspecified-value)
+
+The translation is straightforward:
+
+;; (value-of/k exp env cont)
+(assign-exp (var exp1)
+  (value-of/k exp1 (assign-rhs-cont var env cont)))
+
+The continuation is defined by:
+
+(apply-cont (assign-rhs-cont var env k) val)
+  = (apply-cont k (begin (setref! (apply-env env var) val)
+                         the-unspecified-value))
+
+This is a bit simple-minded, since it's clear that the continuation
+could simply store the reference denoted by var in env, instead of
+the variable and environment themselves.  But this is the point of
+the next exercise.
+
+That's the main change!  The rest is infrastructure we've already
+written.
