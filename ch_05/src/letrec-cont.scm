@@ -39,14 +39,21 @@
 
 ;;;; Procedures
 
-(define (procedure b-var body saved-env)
-  (list 'proc b-var body saved-env))
+(define (procedure b-vars body saved-env)
+  (list 'proc b-vars body saved-env))
 
-;; apply-procedure/k : Proc x Ref x Cont -> Final-answer
-(define (apply-procedure/k proc1 val cont)
+;; apply-procedure/k : Proc x List-of(Val) x Cont -> Final-answer
+(define (apply-procedure/k proc1 vals cont)
   (pmatch proc1
-    ((proc ,var ,body ,env)
-     (value-of/k body (extend-env1 var val env) cont))))
+    ((proc ,vars ,body ,env)
+     (let ((d (- (length vars) (length vals))))
+       (cond ((zero? d)
+              (value-of/k body (extend-env vars vals env) cont))
+             ((positive? d)
+              (error 'apply-procedure/k "too few arguments" vars vals))
+             ((negative? d)
+              (error 'apply-procedure/k
+                     "too many arguments" vars vals)))))))
 
 ;;;; Environments
 
@@ -135,8 +142,8 @@
      (let ((num1 (expval->num val1))
            (num2 (expval->num val)))
        (apply-cont k `(num-val ,(- num1 num2)))))
-    ((rator-cont ,rand ,env ,k)
-     (value-of/k rand env `(rand-cont ,val ,env ,k)))
+    ((rator-cont ,rands ,env ,k)
+     (eval-list/k rands env `(rand-cont ,val ,env ,k)))
     ((rand-cont ,vrat ,env ,k)
      (apply-procedure/k (expval->proc vrat) val k))
     ((cons-car-cont ,dexp ,env ,k)
@@ -180,8 +187,8 @@
      (value-of/k lr-body
                  (extend-env-rec p-names b-vars p-bodies env)
                  cont))
-    ((call-exp ,rator ,rand)
-     (value-of/k rator env `(rator-cont ,rand ,env ,cont)))
+    ((call-exp ,rator ,rands)
+     (value-of/k rator env `(rator-cont ,rands ,env ,cont)))
     ((emptylist-exp) (apply-cont cont '(list-val ())))
     ((cons-exp ,aexp ,dexp)
      (value-of/k aexp env `(cons-car-cont ,dexp ,env ,cont)))
@@ -212,15 +219,15 @@
     ((if ,t ,c ,a) `(if-exp ,(parse t) ,(parse c) ,(parse a)))
     (,v (guard (symbol? v)) `(var-exp ,v))
     ((let ,bs in ,b) (parse-let-exp bs b))
-    ((proc (,v) ,body) (guard (symbol? v))
-     `(proc-exp ,v ,(parse body)))
+    ((proc ,vs ,body) (guard (for-all symbol? vs))
+     `(proc-exp ,vs ,(parse body)))
     ((letrec ,bs in ,body) (parse-letrec-exp bs body))
     ((cons ,a ,d) `(cons-exp ,(parse a) ,(parse d)))
     ((car ,l) `(car-exp ,(parse l)))
     ((cdr ,l) `(cdr-exp ,(parse l)))
     ((null? ,e) `(null?-exp ,(parse e)))
     ((list . ,es) `(list-exp ,(map parse es)))
-    ((,e1 ,e2) `(call-exp ,(parse e1) ,(parse e2)))
+    ((,e1 . ,es) `(call-exp ,(parse e1) ,(map parse es)))
     (? (error 'parse "invalid syntax" sexp))))
 
 ;; parse-let-exp : List x List -> Exp
@@ -239,10 +246,10 @@
 (define (parse-letrec-exp binds body)
   (let* ((f (lambda args
               (pmatch args
-                (((,g (,v) = ,e) (,names ,b-vars ,bodies))
-                 (guard (symbol? g) (symbol? v))
+                (((,g ,vs = ,e) (,names ,b-vars ,bodies))
+                 (guard (symbol? g) (for-all symbol? vs))
                  `((,g . ,names)
-                   (,v . ,b-vars)
+                   (,vs . ,b-vars)
                    (,(parse e) . ,bodies))))))
          (ts (fold-right f '(() () ()) binds)))
     (pmatch ts
@@ -302,4 +309,14 @@
   (test '() (eval-to-num-list '(list)))
   (test '(1 2 3) (eval-to-num-list '(list 1 2 3)))
   (test '(1 5 10) (eval-to-num-list '(list i v x)))
+
+  ;;; Multi-arg procs
+
+  (test 5 (eval-to-num
+           '(let ((add = (proc (x y) (- x (- 0 y))))) in
+              (add (add 1 1) (add 1 (add 1 1))))))
+  (test 5 (eval-to-num
+           '(letrec ((f (x y z) = (- x (- y z)))) in
+              (f 8 5 2))))
+  (test 5 (eval-to-num '(let ((t = (proc () 5))) in (t))))
   )
