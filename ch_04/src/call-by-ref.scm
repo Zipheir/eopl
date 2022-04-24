@@ -1,4 +1,9 @@
-;;;; CALL-BY-REFERENCE language from Ch. 4.
+;;;; CALL-BY-REFERENCE language from Ch. 4, with extensions from
+;;;; the exercises.
+;;;;
+;;;; Ex. 4.32: Multi-argument procedures.
+;;;; Ex. 4.33: Call-by-value procedures (valprocs).
+;;;; Ex. 4.34: letref
 
 (import (rnrs base (6))
         (rnrs lists (6))
@@ -47,6 +52,13 @@
 
     (set! the-store (setref-inner the-store ref))))
 
+;; alloc-array : Nat x Exp-val -> Ref
+(define (alloc-array len val)
+  (let ((next-ref (length the-store))
+        (store* (append the-store (make-list len val))))
+    (set! the-store store*)
+    next-ref))
+
 ;;;; Expressed values
 
 ;; expval->num : Exp-val -> Int
@@ -61,10 +73,17 @@
     ((bool-val ,b) b)
     (? (report-expval-extractor-error 'bool val))))
 
-;; expval->proc : Exp-val -> Proc
-(define (expval->proc val)
+;; expval->array : Exp-val -> Arr
+(define (expval->array val)
   (pmatch val
-    ((proc-val ,p) p)
+    ((array-val ,a) a)
+    (? (report-expval-extractor-error 'array val))))
+
+;; expval->proc+is-ref : Exp-val -> Proc x Bool
+(define (expval->proc+is-ref val)
+  (pmatch val
+    ((refproc-val ,proc) (cons proc #t))
+    ((valproc-val ,proc) (cons proc #f))
     (? (report-expval-extractor-error 'proc val))))
 
 (define (report-expval-extractor-error variant value)
@@ -75,25 +94,56 @@
 ;; the-unspecified-value : Exp-val
 (define the-unspecified-value '(num-val 27))
 
+;;;; Arrays
+
+;; make-array : Nat x Exp-val -> Arr
+(define (make-array len val)
+  `(array ,(alloc-array len val) ,len))
+
+;; array-ref : Arr x Nat -> Ref
+;; Note that this just returns the location.
+(define (array-ref arr k)
+  (pmatch arr
+    ((array ,base ,len)
+     (if (< k len)
+         (+ base k)
+         (report-bounds-error k)))))
+
+;; array-set! : Arr x Nat x Exp-val -> Unspecified
+(define (array-set! arr k val)
+  (pmatch arr
+    ((array ,base ,len)
+     (if (< k len)
+         (setref! (+ base k) val)
+         (report-bounds-error k)))))
+
+;; report-bounds-error : Nat -> ()
+(define (report-bounds-error k)
+  (error 'array-ref "array index out of bounds" k))
+
 ;;;; Procedures
 
-(define (procedure b-var body saved-env)
-  (list 'proc b-var body saved-env))
+(define (procedure b-vars body saved-env)
+  (list 'proc b-vars body saved-env))
 
-;; apply-procedure : Proc x Ref -> Exp-val
-(define (apply-procedure proc1 val)
+;; apply-procedure : Proc x List-of(Ref) -> Exp-val
+(define (apply-procedure proc1 vals)
   (pmatch proc1
-    ((proc ,var ,body ,env)
-     (value-of body (extend-env var val env)))))
+    ((proc ,vars ,body ,env)
+     (value-of body (extend-env vars vals env)))))
 
 ;;;; Environments
 
 ;; empty-env : () -> Env
 (define (empty-env) '())
 
-;; extend-env : Var x Exp-val x Env -> Env
-(define (extend-env var val env)
-  (cons (list 'ext var val) env))
+;; extend-env : List-of(Var) x List-of(Exp-val) x Env -> Env
+(define (extend-env vars vals env)
+  (cons (list 'ext vars vals) env))
+
+;; extend-env1 : Var x Exp-val x Env -> Env
+(define (extend-env1 var val env)
+  (extend-env (list var) (list val) env))
 
 ;; extend-env-rec : List-of(Var) x List-of(Var) x List-of(Exp-val)
 ;;                  x Env -> Env
@@ -104,13 +154,15 @@
 (define (apply-env env search-var)
   (pmatch env
     (() (report-no-binding-found search-var))
-    (((ext ,var ,val) . ,env*)
-     (if (eqv? search-var var) val (apply-env env* search-var)))
+    (((ext ,vars ,vals) . ,env*)
+     (cond ((location search-var vars) =>
+            (lambda (n) (list-ref vals n)))
+           (else (apply-env env* search-var))))
     (((ext-rec ,p-names ,b-vars ,p-bodies) . ,env*)
      (cond ((location search-var p-names) =>
             (lambda (n)
               (newref
-               (list 'proc-val
+               (list 'refproc-val
                      (procedure (list-ref b-vars n)
                                 (list-ref p-bodies n)
                                 env)))))
@@ -137,18 +189,15 @@
 ;; alist->env : List-of(Var x Scheme-val) -> Env
 ;; No recursive bindings.
 (define (alist->env as)
-  (fold-right (lambda (p env)
-                (extend-env (car p) (newref (cdr p)) env))
-              (empty-env)
-              as))
+  (extend-env (map car as) (map cdr as) (empty-env)))
 
 ;;; Initial environment
 
 ;; init-env : () -> Env
 (define (init-env)
-  (alist->env `((i . (num-val 1))
-                (v . (num-val 5))
-                (x . (num-val 10)))))
+  (alist->env `((i . ,(newref '(num-val 1)))
+                (v . ,(newref '(num-val 5)))
+                (x . ,(newref '(num-val 10))))))
 
 ;;;; Main interpreter
 
@@ -184,13 +233,21 @@
     ((let-exp ,var ,exp1 ,body)
      (let ((val (value-of exp1 env)))
        (value-of body
-                 (extend-env var (newref val) env))))
-    ((proc-exp ,var ,body)
-     `(proc-val ,(procedure var body env)))
-    ((call-exp ,rator ,rand)
-     (let ((proc (expval->proc (value-of rator env)))
-           (arg (value-of-operand rand env)))
-       (apply-procedure proc arg)))
+                 (extend-env1 var (newref val) env))))
+    ((refproc-exp ,vars ,body)
+     `(refproc-val ,(procedure vars body env)))
+    ((valproc-exp ,vars ,body)
+     `(valproc-val ,(procedure vars body env)))
+    ((call-exp ,rator ,rands)
+     (pmatch (expval->proc+is-ref (value-of rator env))
+       ((,proc . ,is-refproc)
+        (let ((args
+               ((if is-refproc
+                    value-of-ref-operands
+                    value-of-val-operands)
+                rands
+                env)))
+          (apply-procedure proc args)))))
     ((letrec-exp ,p-names ,b-vars ,p-bodies ,letrec-body)
      (value-of letrec-body
                (extend-env-rec p-names b-vars p-bodies env)))
@@ -198,13 +255,42 @@
      (setref! (apply-env env var) (value-of e env))
      the-unspecified-value)
     ((begin-exp ,es) (value-of-sequence es env))
+    ((letref-exp ,var ,exp1 ,body)
+     (let ((val (value-of-ref-operand exp1 env)))
+       (value-of body (extend-env1 var val env))))
+    ((newarray-exp ,le ,exp1)
+     (let ((len (expval->num (value-of le env)))
+           (val (value-of exp1 env)))
+       `(array-val ,(make-array len val))))
+    ((arrayref-exp ,arr ,addr)
+     (let ((array1 (expval->array (value-of arr env)))
+           (k (expval->num (value-of addr env))))
+       (deref (array-ref array1 k))))
+    ((arrayset-exp ,arr ,addr ,exp1)
+     (let ((array1 (expval->array (value-of arr env)))
+           (k (expval->num (value-of addr env)))
+           (val (value-of exp1 env)))
+       (array-set! array1 k val)
+       the-unspecified-value))
     (? (error 'value-of "invalid expression" exp))))
 
-;; value-of-operand : Exp x Env -> Ref
-(define (value-of-operand exp env)
+;; value-of-ref-operand : Exp x Env -> Ref
+(define (value-of-ref-operand exp env)
   (pmatch exp
     ((var-exp ,var) (apply-env env var))
+    ((arrayref-exp ,arr ,addr)
+     (let ((array1 (expval->array (value-of arr env)))
+           (k (expval->num (value-of addr env))))
+       (array-ref array1 k)))
     (? (newref (value-of exp env)))))
+
+;; value-of-ref-operands : List-of(Exp) x Env -> List-of(Ref)
+(define (value-of-ref-operands exps env)
+  (map (lambda (e) (value-of-ref-operand e env)) exps))
+
+;; value-of-val-operands : List-of(Exp) x Env -> List-of(Ref)
+(define (value-of-val-operands exps env)
+  (map (lambda (e) (newref (value-of e env))) exps))
 
 ;; value-of-sequence : List-of(Exp) -> Exp-val
 (define (value-of-sequence exps env)
@@ -231,27 +317,37 @@
     (,v (guard (symbol? v)) `(var-exp ,v))
     ((let ,v = ,s in ,b) (guard (symbol? v))
      `(let-exp ,v ,(parse s) ,(parse b)))
-    ((proc (,v) ,body) (guard (symbol? v))
-     `(proc-exp ,v ,(parse body)))
+    ((refproc ,vs ,body)
+     (guard (pair? vs) (for-all symbol? vs))
+     `(refproc-exp ,vs ,(parse body)))
+    ((valproc ,vs ,body)
+     (guard (pair? vs) (for-all symbol? vs))
+     `(valproc-exp ,vs ,(parse body)))
     ((letrec ,bs in ,body) (parse-letrec bs body))
     ((set ,v ,ve) (guard (symbol? v))
      `(assign-exp ,v ,(parse ve)))
     ((begin . ,es) `(begin-exp ,(map parse es)))
-    ((,e1 ,e2) `(call-exp ,(parse e1) ,(parse e2)))
+    ((letref ,v = ,e in ,body) (guard (symbol? v))
+     `(letref-exp ,v ,(parse e) ,(parse body)))
+    ((newarray ,le ,ve) `(newarray-exp ,(parse le) ,(parse ve)))
+    ((arrayref ,a ,k) `(arrayref-exp ,(parse a) ,(parse k)))
+    ((arrayset ,a ,k ,e)
+     `(arrayset-exp ,(parse a) ,(parse k) ,(parse e)))
+    ((,et . ,ens) `(call-exp ,(parse et) ,(map parse ens)))
     (? (error 'parse "invalid syntax" sexp))))
 
 ;; parse-letrec : List x List -> Exp
 (define (parse-letrec binds body)
   (letrec
     ((collect
-      (lambda (bs names vars bodies)
+      (lambda (bs names var-lists bodies)
         (pmatch bs
-          (() (values names vars bodies))
-          (((,name (,var) = ,body) . ,bs*)
-           (guard (symbol? name) (symbol? var))
+          (() (values names var-lists bodies))
+          (((,name ,vs = ,body) . ,bs*)
+           (guard (symbol? name) (for-all symbol? vs))
            (collect bs*
                     (cons name names)
-                    (cons var vars)
+                    (cons vs var-lists)
                     (cons (parse body) bodies)))))))
 
     (let-values (((names vars bodies) (collect binds '() '() '())))
@@ -280,9 +376,9 @@
   (test 1 (eval-to-num '(- 3 2)))
   (test 4 (eval-to-num '(let a = (- v i) in a)))
   (test 6 (eval-to-num
-           '(let add1 = (proc (a) (- a (- 0 1))) in (add1 v))))
+           '(let add1 = (refproc (a) (- a (- 0 1))) in (add1 v))))
   (test 5 (eval-to-num
-           '(let add1 = (proc (b) (- b (- 0 1))) in
+           '(let add1 = (refproc (b) (- b (- 0 1))) in
               (letrec ((f (a) = (if (zero? a) 0 (add1 (f (- a 1))))))
                in (f 5)))))
   (test 0 (eval-to-num
@@ -307,19 +403,60 @@
   ;; Call-by-reference
 
   (test 5 (eval-to-num
-           '(let f = (proc (x) (set x 5)) in
+           '(let f = (refproc (x) (set x 5)) in
               (let a = 3 in
                 (begin (f a) a)))))
   (test 44 (eval-to-num
-            '(let f = (proc (x) (set x 44)) in
-               (let g = (proc (y) (f y)) in
+            '(let f = (refproc (x) (set x 44)) in
+               (let g = (refproc (y) (f y)) in
                  (let z = 55 in
                    (begin (g z) z))))))
   (test 11 (eval-to-num
-            '(let swap = (proc (x) (proc (y)
+            '(let swap = (refproc (x) (refproc (y)
                            (let temp = x in
                              (begin (set x y) (set y temp)))))
                in (let a = 33 in
                     (let b = 44 in
                       (begin ((swap a) b) (- a b)))))))
+  (test 44 (eval-to-num
+            '(letrec ((f (x) = (set x 44))
+                      (g (y) = (f y))) in
+               (let z = 55 in
+                 (begin (g z) z)))))
+
+  (test 5 (eval-to-num
+           '(letref a = 3 in
+              (letref b = a in
+                (begin (set a 5) b)))))
+  (test 5 (eval-to-num
+           '(letref a = 3 in
+              (letref b = a in
+                (begin (set b 5) a)))))
+
+  ;; Call-by-value
+
+  (test 5 (eval-to-num
+           '(let a = 5 in
+              (let f = (valproc (x) (set x 3)) in
+                (begin (f a) a)))))
+
+  ;; Call-by-ref. arrays
+
+  (test 5 (eval-to-num '(let a = (newarray 4 5) in (arrayref a 0))))
+  (test 3 (eval-to-num
+           '(let a = (newarray 4 5) in
+              (begin (arrayset a 2 3) (arrayref a 2)))))
+  (test 3 (eval-to-num
+           '(let a = (newarray 4 5) in
+              (let f = (refproc (x) (set x 3)) in
+                (begin (f (arrayref a 0)) (arrayref a 0))))))
+  (test 3 (eval-to-num
+           '(let a = (newarray 4 5) in
+              (let swap = (refproc (x) (refproc (y)
+                            (let temp = x in
+                              (begin (set x y)
+                                     (set y temp)))))
+              in (begin (arrayset a 3 3)
+                        ((swap (arrayref a 0)) (arrayref a 3))
+                        (arrayref a 0))))))
   )
