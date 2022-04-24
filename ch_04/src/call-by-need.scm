@@ -182,9 +182,8 @@
            (value-of con env)
            (value-of alt env))))
     ((let-exp ,var ,exp1 ,body)
-     (let ((val (value-of exp1 env)))
-       (value-of body
-                 (extend-env var (newref val) env))))
+     (let ((val (value-of-operand exp1 env)))
+       (value-of body (extend-env var val env))))
     ((proc-exp ,var ,body)
      `(proc-val ,(procedure var body env)))
     ((call-exp ,rator ,rand)
@@ -214,6 +213,9 @@
 ;; value-of-operand : Exp x Env -> Ref
 (define (value-of-operand exp env)
   (pmatch exp
+    ((const-exp ,n) (newref `(num-val ,n)))
+    ((proc-exp ,var ,body)
+     (newref `(proc-val ,(procedure var body env))))
     ((var-exp ,var) (apply-env env var))
     (? (newref `(thunk ,exp ,env)))))
 
