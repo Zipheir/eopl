@@ -1,0 +1,11 @@
+# Exercise 5.8
+
+Multi-arg procedures for the CPS interpreter are very similar to
+multi-arg let (ex. 5.7).  I make the usual changes to the procedure
+representation and to the parser.  The adjustments to the interpreter
+are all minor, except for rator-cont, which becomes:
+
+(apply-cont (rator-cont rand env cont) val1)
+  = (eval-list/k rands env (rands-cont val1 cont))
+
+The rest is basically the same.
