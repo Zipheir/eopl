@@ -46,6 +46,12 @@
                                         (- ref1 1))))))))
     (set! the-store (setref-inner the-store ref))))
 
+(define (report-invalid-reference ref store)
+  (error 'report-invalid-reference
+         "invalid reference"
+         ref
+         store))
+
 ;;;; Expressed values
 
 (define-record-type num-val
@@ -56,6 +62,9 @@
 
 (define-record-type func-val
   (fields func))
+
+(define-record-type sub-val
+  (fields sub))
 
 ;; expval->num : Exp-val -> Int
 (define (expval->num val)
@@ -74,6 +83,12 @@
   (if (func-val? val)
       (func-val-func val)
       (report-expval-extractor-error 'func val)))
+
+;; expval->sub : Exp-val -> Sub
+(define (expval->sub val)
+  (if (sub-val? val)
+      (sub-val-sub val)
+      (report-expval-extractor-error 'sub val)))
 
 (define (report-expval-extractor-error variant value)
   (error 'expval-extractors
@@ -105,6 +120,18 @@
                         (newref val)
                         (func-saved-env func1))))
 
+;;;; Subroutines
+
+(define-record-type sub
+  (fields var body saved-env))
+
+;; exec-subroutine : Sub x Exp-val -> ()
+(define (exec-subroutine sub1 val)
+  (result-of (sub-body sub1)
+	     (extend-env (sub-var sub1)
+			 (newref val)
+		         (sub-saved-env sub1))))
+
 ;;;; Environments
 
 (define (empty-env) '())
@@ -125,20 +152,6 @@
          val
          (apply-env rest-env search-var)))
     (? (error 'apply-env "invalid environment" env))))
-
-;; location : Var x List-of(Var) -> Nat + False
-(define (location var vs)
-  (letrec
-    ((index-of
-      (lambda (vs k)
-        (pmatch vs
-          (() #f)
-          ((,v . ,vs*)
-           (if (eqv? v var)
-               k
-               (index-of vs* (+ k 1))))))))
-
-    (index-of vs 0)))
 
 (define (report-no-binding-found var)
   (error 'apply-env "no binding found" var))
@@ -185,6 +198,8 @@
            (make-bool-val #f))))
     ((func-exp ,var ,body)
      (make-func-val (make-func var body env)))
+    ((sub-exp ,var ,body)
+     (make-sub-val (make-sub var body env)))
     ((call-exp ,rator ,rand)
      (let ((func1 (expval->func (value-of rator env)))
            (rval (value-of rand env)))
@@ -209,11 +224,26 @@
      (let loop ()
        (when (expval->bool (value-of test env))
          (begin (result-of body env) (loop)))))
-    ((block-stmt ,vars ,body)
-     (let ((refs (map (lambda (_) (newref 'uninitialized)) vars)))
+    ((block-stmt ,vars ,exps ,body)
+     (let* ((vals (map (lambda (e) (value-of e env)) exps))
+            (refs (map (lambda (v) (newref v)) vals)))
        (result-of body (extend-env-all vars refs env))))
     ((begin-stmt ,stmts)
      (for-each (lambda (st) (result-of st env)) stmts))
+    ((read-stmt ,var)
+     (let ((x (read)))
+       (if (integer? x)
+           (setref! (apply-env env var) (make-num-val x))
+           (error 'result-of "invalid input value" x))))
+    ((do-while-exp ,body ,test)
+     (let loop ()
+       (result-of body env)
+       (when (expval->bool (value-of test env))
+         (loop))))
+    ((call-stmt ,rator ,rand)
+     (let ((sub1 (expval->sub (value-of rator env)))
+           (rval (value-of rand env)))
+       (exec-subroutine sub1 rval)))
     (? (error 'result-of "invalid statement" stmt))))
 
 ;; result-of-program : Prog -> ()
@@ -234,6 +264,8 @@
     ((! ,e) `(not-exp ,(exp-parse e)))
     ((func (,v) ,body) (guard (symbol? v))
      `(func-exp ,v ,(exp-parse body)))
+    ((sub (,v) ,body) (guard (symbol? v))
+     `(sub-exp ,v ,(parse body)))
     ((,f ,a) `(call-exp ,(exp-parse f) ,(exp-parse a)))
     (? (error 'exp-parse "invalid expression syntax" sexp))))
 
@@ -248,10 +280,27 @@
      `(if-stmt ,(exp-parse test) ,(parse con) ,(parse alt)))
     ((while ,test ,body)
      `(while-stmt ,(exp-parse test) ,(parse body)))
-    ((var ,vs : ,body) (guard (for-all symbol? vs))
-     `(block-stmt ,vs ,(parse body)))
+    ((var ,inits : ,body) (parse-block inits body))
     ((begin . ,sts) `(begin-stmt ,(map parse sts)))
+    ((read ,v) (guard (symbol? v)) `(read-stmt ,v))
+    ((do ,body while ,test)
+     `(do-while-exp ,(parse body) ,(exp-parse test)))
+    ((,s ,a) `(call-stmt ,(exp-parse s) ,(exp-parse a)))
     (? (error 'parse "invalid statement syntax" sexp))))
+
+;; parse-block : List -> Stmt
+(define (parse-block inits body)
+  (letrec
+    ((collect  ; in reverse order
+      (lambda (ins vars exps)
+        (pmatch ins
+          (() (values vars exps))
+          (((,v = ,e) . ,ins*) (guard (symbol? v))
+           (collect ins* (cons v vars) (cons (exp-parse e) exps)))
+          (? (error 'parse "invalid block statement syntax" ins))))))
+
+    (let-values (((vars exps) (collect inits '() '())))
+      (list 'block-stmt vars exps (parse body)))))
 
 ;; parse-program : List -> Program
 (define (parse-program sexp)
