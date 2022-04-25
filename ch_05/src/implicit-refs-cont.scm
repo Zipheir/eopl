@@ -156,6 +156,11 @@
     ((assign-rhs-cont ,ref ,k)
      (apply-cont k (begin (setref! ref val)
                           the-unspecified-value)))
+    ((seq-rest-cont ,exps ,env ,k)
+     (pmatch exps
+       (() (apply-cont k val))
+       ((,e . ,es)  ; discard val
+        (value-of/k e env `(seq-rest-cont ,es ,env ,k)))))
     (? (error 'apply-cont "invalid continuation" cont))))
 
 ;;;; Interpreter
@@ -191,6 +196,11 @@
      (value-of/k exp1
                  env
                  `(assign-rhs-cont ,(apply-env env var) ,cont)))
+    ((begin-exp ,exps)
+     (pmatch exps
+       (() (apply-cont cont the-unspecified-value))
+       ((,e . ,es)
+        (value-of/k e env `(seq-rest-cont ,es ,env ,cont)))))
     (? (error 'value-of/k "invalid expression" exp))))
 
 ;; Parser for a simple S-exp representation.
@@ -211,6 +221,7 @@
      `(letrec-exp ,f ,v ,(parse e) ,(parse body)))
     ((set ,v ,e) (guard (symbol? v))
      `(assign-exp ,v ,(parse e)))
+    ((begin . ,es) `(begin-exp ,(map parse es)))
     ((,e1 ,e2) `(call-exp ,(parse e1) ,(parse e2)))
     (? (error 'parse "invalid syntax" sexp))))
 
@@ -245,15 +256,14 @@
 
   (test 5 (eval-to-num
            '(let x = 0
-             in (let dum = (set x 5)
-                 in x))))
+             in (begin (set x 5) x))))
   (test 8 (eval-to-num
            '(let acc = 0
              in (let add2 = (proc (a) (- a (- 0 2)))
                  in (letrec double (x) =
                               (if (zero? x)
                                   acc
-                                  (let dum = (set acc (add2 acc))
-                                    in (double (- x 1))))
+                                  (begin (set acc (add2 acc))
+                                         (double (- x 1))))
                      in (double 4))))))
   )

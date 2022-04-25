@@ -1,0 +1,26 @@
+# Exercise 5.11
+
+begin expressions for the CPS IMPLICIT-REFS interpreter.  This is
+pure control:
+
+;; (value-of/k exp env cont)
+(begin-exp (exps)
+  (if (null? exps)
+      (apply-cont cont the-unspecifie-value)
+      (value-of/k (car exps)
+                  env
+                  (seq-rest-cont (cdr exps) env cont))))
+
+The continuation is specified by
+
+(apply-cont (seq-rest-cont exps env cont) val)
+  = (if (null? exps)
+        (apply-cont cont val)
+        (value-of/k (car exps)
+                    env
+                    (seq-rest-cont (cdr exps) env cont)))
+
+Note that the null? checks serve different purposes; begin expressions
+evaluate to the-unspecified-value just in the case when there are no
+subexpressions.  In every other case, they return the value of the
+last subexpression.
