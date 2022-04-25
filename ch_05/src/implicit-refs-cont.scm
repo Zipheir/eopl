@@ -153,8 +153,8 @@
      (value-of/k rand env `(rand-cont ,val ,env ,k)))
     ((rand-cont ,vrat ,env ,k)
      (apply-procedure/k (expval->proc vrat) val k))
-    ((assign-rhs-cont ,var ,env ,k)
-     (apply-cont k (begin (setref! (apply-env env var) val)
+    ((assign-rhs-cont ,ref ,k)
+     (apply-cont k (begin (setref! ref val)
                           the-unspecified-value)))
     (? (error 'apply-cont "invalid continuation" cont))))
 
@@ -188,7 +188,9 @@
     ((call-exp ,rator ,rand)
      (value-of/k rator env `(rator-cont ,rand ,env ,cont)))
     ((assign-exp ,var ,exp1)
-     (value-of/k exp1 env `(assign-rhs-cont ,var ,env ,cont)))
+     (value-of/k exp1
+                 env
+                 `(assign-rhs-cont ,(apply-env env var) ,cont)))
     (? (error 'value-of/k "invalid expression" exp))))
 
 ;; Parser for a simple S-exp representation.
