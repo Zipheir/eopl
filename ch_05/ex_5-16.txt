@@ -1,0 +1,52 @@
+# Exercise 5.16
+
+A CPS interpreter for the language of Ex. 4.22 (which I've called
+BASICALLY).
+
+There are a few interesting things about this interpreter.  There are
+two types of continuations: command continuations and value
+continuations.  Statements of BASICALLY are always evaluated in command
+continuations, which take no values, while expressions are expected to
+deliver one value to a value continuation.
+
+The begin statement can have a simpler implementation here than in
+the expression-oriented languages, since it does not return a value:
+
+;; (result-of/k stmt env com-cont)
+(begin-stmt (stmts)
+  (exec-com-cont (seq-rest-cont stmts env com-cont)))
+
+where the procedural representation of 'seq-rest-cont' is
+
+(define (seq-rest-cont stmts env com-cont)
+  (lambda ()
+    (if (null? stmts)
+        (exec-com-cont com-cont)
+        (result-of/k (car stmts)
+                     env
+                     (seq-rest-cont (cdr stmts) env com-cont)))))
+
+So the interpreter can immediately call a continuation, since there's
+no special case for "empty begin".
+
+The implementation of the 'while' form is also worth looking at.  The
+test expression is evaluated in a value continuation which also saves
+the test for later use.  The test is also threaded through the command
+continuation which the body statment is executed in.  So it's sort of
+a three-stage loop.
+
+;; (result-of/k stmt env com-cont)
+(while-stmt (test body)
+  (value-of/k test env (while-test-cont test body env com-cont)))
+
+;; while-test-cont : Exp x Stmt x Env x Com-cont -> Val-cont
+(define (while-test-cont test body env cont)
+  (lambda (val)
+    (if (expval->bool val)
+        (result-of/k body env (while-next-cont test body env cont))
+        (exec-com-cont cont))))
+
+;; while-next-cont : Exp x Stmt x Env x Com-cont -> Com-cont
+(define (while-next-cont test body env cont)
+  (lambda ()
+    (value-of/k test env (while-test-cont test body env cont))))
