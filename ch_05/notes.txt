@@ -83,3 +83,55 @@ The treatment of the other forms is analogous.  In each case, the
 evaluation is "unnested", and a specially-crafted continuation
 replaces the computation that would be performed on the bound values
 of the subexpressions.
+
+## 5.2 A trampolined interpreter
+
+I don't seem much reason to bother with this.  A trampoline is an
+implementation trick that isn't really interesting to me in itself.
+I might come back and do Ex. 5.21, though.
+
+## 5.3 An imperative interpreter
+
+AKA λ the ultimate GOTO.
+
+We've already seen that shared variables can replace local bindings.
+A continuation-passing interpreter can use shared variables rather
+than passing data through procedure calls; in the extreme case, this
+models all control with zero-argument tail calls, which can be
+directly translated to jumps.  Such a nullary CPS interpreter can
+easily be translated into a language without higher-order procedures.
+
+So which procedures will communicate via shared variables?  (This
+section calls them "registers".)
+
+* (value-of/k exp env cont)
+* (apply-cont cont val)
+* (apply-procedure/k proc1 val cont)
+
+Thus, there are five global registers, exp, env, cont, val, and
+proc1, and the three procedures above are replaced with nullary
+forms that manipulate these registers.
+
+Example fragment:
+
+(define (value-of/k)
+  (cases expression exp
+    (const-exp (num)
+      (set! val (num-val num))
+      (apply-cont))
+    ; ...
+    ))
+
+the book also includes the statement (set! cont cont) to indicate
+that the original procedural version passed the original continuation
+to apply-cont.  but why would you write that out?  the only way we'd
+get such statements would be via some formal process for "registerizing"
+procedures, but the book is just doing this ad-hoc-ly.
+
+Of course, we have to be very careful to ensure that no names shadow
+the register names.  (Then maybe they shouldn't be so short!  I'm
+using *exp-register* and so on in my implementations.)  We also have to
+be careful that the assignments take place in the right order if any
+registers are used more than once.
+
+See src/letrec-reg.scm for the registerized interpreter.
