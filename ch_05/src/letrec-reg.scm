@@ -84,7 +84,7 @@
      (if (eqv? search-var var)
          val
          (apply-env env* search-var)))
-    (((ext-rec ,p-name ,b-var ,p-bodies) . ,env*)
+    (((ext-rec ,p-name ,b-var ,p-body) . ,env*)
      (if (eqv? p-name search-var)
          (list 'proc-val (procedure b-var p-body env))
          (apply-env env* search-var)))
@@ -96,7 +96,9 @@
 ;; alist->env : List-of(Var x Scheme-val) -> Env
 ;; No recursive bindings.
 (define (alist->env as)
-  (extend-env (map car as) (map cdr as) (empty-env)))
+  (fold-right (lambda (p e) (extend-env (car p) (cdr p) e))
+              (empty-env)
+              as))
 
 ;;; Initial environment
 
@@ -122,7 +124,7 @@
      *val-reg*)
     ((zero1-cont ,k)
      (set! *cont-reg* k)
-     (set! *val-reg* `(bool-val ,(zero? (expval->num val))))
+     (set! *val-reg* `(bool-val ,(zero? (expval->num *val-reg*))))
      (apply-cont))
     ((if-test-cont ,exp2 ,exp3 ,env ,k)
      (set! *cont-reg* k)
@@ -142,7 +144,7 @@
      (set! *env-reg* env)
      (value-of/k))
     ((diff2-cont ,val1 ,k)
-     (set! *cont-exp* k)
+     (set! *cont-reg* k)
      (let ((num1 (expval->num val1))
            (num2 (expval->num *val-reg*)))
        (set! *val-reg* `(num-val ,(- num1 num2))))
@@ -153,10 +155,10 @@
      (set! *exp-reg* rand)
      (value-of/k))
     ((rand-cont ,vrat ,env ,k)
-     (set! *cont* k)
+     (set! *cont-reg* k)
      (set! *proc1-reg* (expval->proc vrat))
      (apply-procedure/k))
-    (? (error 'apply-cont "invalid continuation" cont))))
+    (? (error 'apply-cont "invalid continuation" *cont-reg*))))
 
 ;;;; Interpreter
 
@@ -164,7 +166,7 @@
 (define (value-of-program pgm print-msg)
   (pmatch pgm
     ((program ,exp1)
-     (set! *cont-exp* `(end-cont ,print-msg))
+     (set! *cont-reg* `(end-cont ,print-msg))
      (set! *exp-reg* exp1)
      (set! *env-reg* (init-env))
      (value-of/k))))
@@ -194,11 +196,11 @@
     ((if-exp ,exp1 ,exp2 ,exp3)
      (set! *cont-reg*
            `(if-test-cont ,exp2 ,exp3 ,*env-reg* ,*cont-reg*))
-     (set! *exp-reg* exp2)
+     (set! *exp-reg* exp1)
      (value-of/k))
     ((let-exp ,var ,exp1 ,body)
      (set! *cont-reg*
-           `(let-exps-cont ,var ,body ,*env-reg* ,*cont-reg*))
+           `(let-exp-cont ,var ,body ,*env-reg* ,*cont-reg*))
      (set! *exp-reg* exp1)
      (value-of/k))
     ((letrec-exp ,p-name ,b-var ,p-body ,lr-body)
@@ -221,105 +223,41 @@
     ((zero? ,s) `(zero?-exp ,(parse s)))
     ((if ,t ,c ,a) `(if-exp ,(parse t) ,(parse c) ,(parse a)))
     (,v (guard (symbol? v)) `(var-exp ,v))
-    ((let ,bs in ,b) (parse-let-exp bs b))
-    ((proc ,vs ,body) (guard (for-all symbol? vs))
-     `(proc-exp ,vs ,(parse body)))
-    ((letrec ,bs in ,body) (parse-letrec-exp bs body))
-    ((cons ,a ,d) `(cons-exp ,(parse a) ,(parse d)))
-    ((car ,l) `(car-exp ,(parse l)))
-    ((cdr ,l) `(cdr-exp ,(parse l)))
-    ((null? ,e) `(null?-exp ,(parse e)))
-    ((list . ,es) `(list-exp ,(map parse es)))
-    ((,e1 . ,es) `(call-exp ,(parse e1) ,(map parse es)))
+    ((let ,v = ,exp1 in ,body) (guard (symbol? v))
+     `(let-exp ,v ,(parse exp1) ,(parse body)))
+    ((proc (,v) ,body) (guard (symbol? v))
+     `(proc-exp ,v ,(parse body)))
+    ((letrec ,nm (,v) = ,pbody in ,body)
+     (guard (symbol? nm) (symbol? v))
+     `(letrec-exp ,nm ,v ,(parse pbody) ,(parse body)))
+    ((,e1 ,e2) `(call-exp ,(parse e1) ,(parse e2)))
     (? (error 'parse "invalid syntax" sexp))))
-
-;; parse-let-exp : List x List -> Exp
-(define (parse-let-exp binds body)
-  (letrec
-    ((collect
-      (lambda (bs vars vals)
-        (pmatch bs
-          (() (values vars vals))
-          (((,v = ,e) . ,bs*) (guard (symbol? v))
-           (collect bs* (cons v vars) (cons (parse e) vals)))))))
-
-    (let-values (((vars vals) (collect binds '() '())))
-      `(let-exp ,vars ,vals ,(parse body)))))
-
-(define (parse-letrec-exp binds body)
-  (let* ((f (lambda args
-              (pmatch args
-                (((,g ,vs = ,e) (,names ,b-vars ,bodies))
-                 (guard (symbol? g) (for-all symbol? vs))
-                 `((,g . ,names)
-                   (,vs . ,b-vars)
-                   (,(parse e) . ,bodies))))))
-         (ts (fold-right f '(() () ()) binds)))
-    (pmatch ts
-      ((,names ,vars ,bodies)
-       `(letrec-exp ,names ,vars ,bodies ,(parse body))))))
 
 ;; parse-program : List -> Program
 (define (parse-program sexp)
   (list 'program (parse sexp)))
 
-;; run : List x Bool -> Final-answer
-(define (run sexp print-msg)
-  (value-of-program (parse-program sexp) print-msg))
+;; run : List ... -> Final-answer
+(define (run sexp . opt)
+  (let ((print-msg (and (pair? opt) (car opt))))
+    (value-of-program (parse-program sexp) print-msg)))
 
 ;;;; Tests
 
 (define (run-tests)
   (define (eval-to-num exp)
-    (expval->num (run exp #f)))
-
-  (define (eval-to-num-list exp)
-    (map expval->num (expval->list (run exp #f))))
+    (expval->num (run exp)))
 
   (test 5 (eval-to-num '5))
   (test 5 (eval-to-num 'v))
   (test 0 (eval-to-num '(if (zero? 2) 1 0)))
   (test 1 (eval-to-num '(if (zero? 0) 1 0)))
   (test 1 (eval-to-num '(- 3 2)))
-  (test 4 (eval-to-num '(let ((a = (- v i))) in a)))
+  (test 4 (eval-to-num '(let a = (- v i) in a)))
   (test 6 (eval-to-num
-           '(let ((add1 = (proc (a) (- a (- 0 1))))) in (add1 v))))
+           '(let add1 = (proc (a) (- a (- 0 1))) in (add1 v))))
   (test 5 (eval-to-num
-           '(let ((add1 = (proc (b) (- b (- 0 1))))) in
-              (letrec ((f (a) = (if (zero? a) 0 (add1 (f (- a 1))))))
+           '(let add1 = (proc (b) (- b (- 0 1))) in
+              (letrec f (a) = (if (zero? a) 0 (add1 (f (- a 1))))
                in (f 5)))))
-  (test 5 (eval-to-num
-           '(let ((a = 8) (b = 1) (c = 2)) in (- (- a b) c))))
-  (test 1 (eval-to-num
-           '(letrec ((even (x) = (if (zero? x) 1 (odd (- x 1))))
-                     (odd (x) = (if (zero? x) 0 (even (- x 1)))))
-             in (even 4))))
-  (test 0 (eval-to-num
-           '(letrec ((even (x) = (if (zero? x) 1 (odd (- x 1))))
-                     (odd (x) = (if (zero? x) 0 (even (- x 1)))))
-             in (even 5))))
-
-  ;;; Lists
-
-  (test '() (eval-to-num-list 'emptylist))
-  (test '(1) (eval-to-num-list '(cons 1 emptylist)))
-  (test '(1 2 3) (eval-to-num-list '(cons 1 (cons 2 (cons 3 emptylist)))))
-  (test 1 (eval-to-num '(car (cons 1 emptylist))))
-  (test '(2 3) (eval-to-num-list
-                '(cdr (cons 1 (cons 2 (cons 3 emptylist))))))
-  (test 1 (eval-to-num '(if (null? emptylist) 1 0)))
-  (test 0 (eval-to-num '(if (null? (cons 1 emptylist)) 1 0)))
-  (test '() (eval-to-num-list '(list)))
-  (test '(1 2 3) (eval-to-num-list '(list 1 2 3)))
-  (test '(1 5 10) (eval-to-num-list '(list i v x)))
-
-  ;;; Multi-arg procs
-
-  (test 5 (eval-to-num
-           '(let ((add = (proc (x y) (- x (- 0 y))))) in
-              (add (add 1 1) (add 1 (add 1 1))))))
-  (test 5 (eval-to-num
-           '(letrec ((f (x y z) = (- x (- y z)))) in
-              (f 8 5 2))))
-  (test 5 (eval-to-num '(let ((t = (proc () 5))) in (t))))
   )
