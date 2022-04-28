@@ -13,6 +13,7 @@
 (define *cont-reg* 'uninitialized)
 (define *val-reg* 'uninitialized)
 (define *proc1-reg* 'uninitialized)
+(define *args-reg* 'uninitialized)
 
 ;;;; Expressed values
 
@@ -47,20 +48,20 @@
 
 ;;;; Procedures
 
-(define (procedure b-var body saved-env)
-  (list 'proc b-var body saved-env))
+(define (procedure b-vars body saved-env)
+  (list 'proc b-vars body saved-env))
 
 ;; apply-procedure/k : () -> Final-answer
 ;;
 ;; Relies on regs
 ;;   *proc1-reg* : Proc
-;;   *val-reg*   : Exp-val
 ;;   *cont-reg*  : Cont
+;;   *args-reg*  : List-of(Exp-val)
 (define (apply-procedure/k)
   (pmatch *proc1-reg*
-    ((proc ,var ,body ,env)
+    ((proc ,vars ,body ,env)
      (set! *exp-reg* body)
-     (set! *env-reg* (extend-env var *val-reg* env))
+     (set! *env-reg* (extend-env-multi vars (reverse *args-reg*) env))
      (value-of/k))))
 
 ;;;; Environments
@@ -71,6 +72,10 @@
 ;; extend-env : Var x Exp-val x Env -> Env
 (define (extend-env var val env)
   (cons (list 'ext var val) env))
+
+;; extend-env-multi : List-of(Var) x List-of(Val) x Env -> Env
+(define (extend-env-multi vars vals env)
+  (fold-right extend-env env vars vals))
 
 ;; extend-env-rec : Var x Var x Exp-val x Env -> Env
 (define (extend-env-rec p-name b-var p-body env)
@@ -84,9 +89,9 @@
      (if (eqv? search-var var)
          val
          (apply-env env* search-var)))
-    (((ext-rec ,p-name ,b-var ,p-body) . ,env*)
+    (((ext-rec ,p-name ,b-vars ,p-body) . ,env*)
      (if (eqv? p-name search-var)
-         (list 'proc-val (procedure b-var p-body env))
+         (list 'proc-val (procedure b-vars p-body env))
          (apply-env env* search-var)))
     (? (error 'apply-env "invalid environment" env))))
 
@@ -149,16 +154,44 @@
            (num2 (expval->num *val-reg*)))
        (set! *val-reg* `(num-val ,(- num1 num2))))
      (apply-cont))
-    ((rator-cont ,rand ,env ,k)
-     (set! *cont-reg* `(rand-cont ,*val-reg* ,env ,k))
-     (set! *env-reg* env)
-     (set! *exp-reg* rand)
-     (value-of/k))
-    ((rand-cont ,vrat ,env ,k)
-     (set! *cont-reg* k)
-     (set! *proc1-reg* (expval->proc vrat))
-     (apply-procedure/k))
+    ((rator-cont ,rands ,env ,k) (apply-rator-cont rands env k))
+    ((rands-cont ,vrat ,rands ,env ,k)
+     (apply-rands-cont vrat rands env k))
     (? (error 'apply-cont "invalid continuation" *cont-reg*))))
+
+;; apply-rator-cont : List-of(Exp) x Env x Cont -> Final-answer
+;;
+;; Relies on register *val-reg*.
+(define (apply-rator-cont rands env k)
+  (set! *args-reg* '())  ; clear argument stack
+  (pmatch rands
+    (() (set! *cont-reg* k)
+        (set! *env-reg* env)
+        (set! *proc1-reg* (expval->proc *val-reg*))
+        (apply-procedure/k))
+    ((,e . ,es)
+     (set! *cont-reg* `(rands-cont ,*val-reg* ,es ,env ,k))
+     (set! *exp-reg* e)
+     (set! *env-reg* env)
+     (value-of/k))))
+
+;; apply-rands-cont : Val x List-of(Exp) x Env x Cont -> Final-answer
+;;
+;; Relies on register *val-reg*, which is expected to contain the
+;; most recently evaluated operand, and *args-reg*, which contains
+;; the stack of arguments evaluated so far.
+(define (apply-rands-cont rator-val rands env k)
+  (set! *args-reg* (cons *val-reg* *args-reg*)) ; accumulate
+  (pmatch rands
+    (() (set! *cont-reg* k)
+        (set! *env-reg* env)
+        (set! *proc1-reg* (expval->proc rator-val))
+        (apply-procedure/k))
+    ((,e . ,es)
+     (set! *cont-reg* `(rands-cont ,rator-val ,es ,env ,k))
+     (set! *exp-reg* e)
+     (set! *env-reg* env)
+     (value-of/k))))
 
 ;;;; Interpreter
 
@@ -203,12 +236,12 @@
            `(let-exp-cont ,var ,body ,*env-reg* ,*cont-reg*))
      (set! *exp-reg* exp1)
      (value-of/k))
-    ((letrec-exp ,p-name ,b-var ,p-body ,lr-body)
+    ((letrec-exp ,p-name ,b-vars ,p-body ,lr-body)
      (set! *exp-reg* lr-body)
-     (set! *env-reg* (extend-env-rec p-name b-var p-body *env-reg*))
+     (set! *env-reg* (extend-env-rec p-name b-vars p-body *env-reg*))
      (value-of/k))
-    ((call-exp ,rator ,rand)
-     (set! *cont-reg* `(rator-cont ,rand ,*env-reg* ,*cont-reg*))
+    ((call-exp ,rator ,rands)
+     (set! *cont-reg* `(rator-cont ,rands ,*env-reg* ,*cont-reg*))
      (set! *exp-reg* rator)
      (value-of/k))
     (? (error 'value-of/k "invalid expression" exp))))
@@ -225,12 +258,12 @@
     (,v (guard (symbol? v)) `(var-exp ,v))
     ((let ,v = ,exp1 in ,body) (guard (symbol? v))
      `(let-exp ,v ,(parse exp1) ,(parse body)))
-    ((proc (,v) ,body) (guard (symbol? v))
-     `(proc-exp ,v ,(parse body)))
-    ((letrec ,nm (,v) = ,pbody in ,body)
-     (guard (symbol? nm) (symbol? v))
-     `(letrec-exp ,nm ,v ,(parse pbody) ,(parse body)))
-    ((,e1 ,e2) `(call-exp ,(parse e1) ,(parse e2)))
+    ((proc ,vs ,body) (guard (for-all symbol? vs))
+     `(proc-exp ,vs ,(parse body)))
+    ((letrec ,nm ,vs = ,pbody in ,body)
+     (guard (symbol? nm) (for-all symbol? vs))
+     `(letrec-exp ,nm ,vs ,(parse pbody) ,(parse body)))
+    ((,e1 . ,es) `(call-exp ,(parse e1) ,(map parse es)))
     (? (error 'parse "invalid syntax" sexp))))
 
 ;; parse-program : List -> Program
@@ -260,4 +293,6 @@
            '(let add1 = (proc (b) (- b (- 0 1))) in
               (letrec f (a) = (if (zero? a) 0 (add1 (f (- a 1))))
                in (f 5)))))
+  (test 5 (eval-to-num '((proc (a b) (- a (- 0 b))) 2 3)))
+  (test 5 (eval-to-num '((proc (a b c d e) e) 1 2 3 4 5)))
   )
