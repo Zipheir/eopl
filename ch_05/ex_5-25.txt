@@ -1,0 +1,71 @@
+# Exercise 5.25
+
+This exercise extends the registerized LETREC interpreter with
+multi-argument procedures (or it registerizes the multi-arg LETREC
+interpreter--your choice).
+
+With strict CPS in the earlier interpreter (Ex. 5.8), the only way
+to build lists of results was to build up a continuation which would
+collect them after they were all evaluated.  Using that model here
+would be very clunky, since we'd have three steps: evaluate each
+expression, building up a big "collection" continuation, then execute
+that continuation to get a list, then assign that list to the value
+register.
+
+With stateful registers, though, there's another option: push each
+value as it's produced onto an argument stack.  Let's try this.
+
+I add a new register, *args-reg* : List-of(Val).  This will be the
+argument stack.
+
+Only the names change ("rand" -> "rands") in the call-exp clause
+of value-of/k.  Similar minor adjustments have to be made to proc
+and letrec expressions.
+
+;; (apply-cont)
+(rator-cont (rands saved-env saved-cont)
+  (set! *args-reg* '())  ; clear stack
+  (set! *env-reg* saved-env)
+  (if (null? rands)
+      (begin
+       (set! *cont-reg* saved-cont)
+       (set! *proc1-reg* (expval->proc *val-reg*))
+       (apply-procedure/k))
+      (begin
+       (set! *cont-reg*
+             (rands-cont *val-reg* (cdr rands) saved-env saved-cont))
+       (set! *exp-reg* (car rands))
+       (value-of/k))))
+
+(rands-cont (rator-val rands saved-env saved-cont)
+  (set! *args-reg* (cons *val-reg* *args-reg*))  ; accumulate
+  (if (null? rands)
+      (begin
+       (set! *cont-reg* saved-cont)
+       (set! *env-reg* saved-env)
+       (set! *proc1-reg* (expval->proc rator-val))
+       (apply-procedure/k))
+      (begin
+       (set! *cont-reg*
+             (rands-cont rator-val (cdr rands) saved-env saved-cont))
+       (set! *exp-reg* (car rands))
+       (set! *env-reg* saved-env)
+       (value-of/k))))
+
+There's some duplication in the empty args case here, and it would
+be nice to get rid of it.  But there are definitely two distinct cases
+here: the first, when the value in *val-reg* is the procedure to apply,
+and the second when it's the last argument.
+
+Of course, this accumulation process reverses the order of the
+arguments; apply-procedure/k must un-reverse them.
+
+(define (apply-procedure/k)
+  (cases proc *proc1-reg*
+    (procedure (vars body saved-env)
+      (set! *exp-reg* body)
+      (set! *env-reg* (extend-env vars (reverse *args-reg*) saved-env))
+      (value-of/k))))
+
+As usual for these exercises, extend-env has to be extended to handle
+multiple bindings.
