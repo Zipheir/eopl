@@ -1,0 +1,28 @@
+# Exercise 5.29
+
+Here's the registerized CPS version of fact-iter.  This only really
+makes sense in the context of a larger program (perhaps the output
+of a compiler).
+
+(define *result-reg* 'uninitialized)
+(define *arg-reg* 'uninitialized)
+(define *cont-arg* ...)  ; controlled by the rest of the program
+
+;; This is a clause of some notional value-of/k construct.
+;; Expects its (natural) argument to be in *arg-reg*, places
+;; the result in *result-reg*, then jumps to the current continuation.
+(fact-iter
+  (set! *result-reg* 1)
+  (set! *cont-reg* (fact-iter-cont *cont-reg*)))
+
+;; This is the corresponding clause in apply-cont.
+(fact-iter-cont (k)
+  (if (zero? *arg-reg*)
+      (begin
+       (set! *cont-reg* k)
+       (apply-cont))
+      (begin
+       (set! *cont-reg* (fact-iter-cont k))
+       (set! *result-reg* (* *arg-reg* *result-reg*))
+       (set! *arg-reg* (- *arg-reg* 1))
+       (apply-cont))))
