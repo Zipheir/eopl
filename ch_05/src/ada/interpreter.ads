@@ -56,13 +56,15 @@ package Interpreter is
 
   No_Binding_Error: exception;
 
-  type Expr_Kind is (Const_Exp, Proc_Exp, Call_Exp);
+  type Expr_Kind is (Const_Exp, Var_Exp, Proc_Exp, Call_Exp);
 
   type Expression(Kind: Expr_Kind) is
     record
       case Kind is
         when Const_Exp =>
           Num: Integer;
+        when Var_Exp =>
+          Var: Variable;
         when Proc_Exp =>
           Bound_Var: Variable;
           PBody: Expr_Ptr;

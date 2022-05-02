@@ -34,10 +34,11 @@ package body Interpreter is
     raise No_Binding_Error;
   end Report_No_Binding_Found;
 
-  -- TODO
   function Init_Env return Env_Ptr is
   begin
-    return null;
+    return new Frame'('I', Make_Num_Val(1),
+             new Frame'('V', Make_Num_Val(5),
+               new Frame'('X', Make_Num_Val(10), null)));
   end Init_Env;
 
   -- Expressed values
@@ -168,6 +169,9 @@ package body Interpreter is
     case E.Kind is
       when Const_Exp =>
         Val_Register := Make_Num_Val(E.Num);
+        Apply_Cont;
+      when Var_Exp =>
+        Val_Register := Apply_Env(Env_Register, E.Var);
         Apply_Cont;
       when Proc_Exp =>
         P.Bound_Var := E.Bound_Var;
