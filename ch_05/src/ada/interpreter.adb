@@ -131,16 +131,31 @@ package body Interpreter is
     return K;
   end Pop_Cont;
 
+  function Current_Cont return Cont_Ptr is
+  begin
+    return Cont_Register(Cont_Stack_Index - 1);
+  end Current_Cont;
+
   -- Cont_Register is assumed to hold the rest of the continuation
   -- stack.
   procedure Apply_Cont is
     K, Next: Cont_Ptr;
+    N: Integer;
   begin
     K := Pop_Cont;
     case K.Kind is
       when Empty_Cont =>
         Print_Value_Register;
         Ada.Text_IO.Put_Line("End of computation.");
+      when Zero1_Cont =>
+        Push_Cont(K.Kont);
+        N := Exp_Val_to_Num(Val_Register);
+        if N = 0 then
+          Val_Register := Make_Bool_Val(True);
+        else
+          Val_Register := Make_Bool_Val(False);
+        end if;
+        Apply_Cont;
       when Rator_Cont =>
         Next := new Cont'(Rand_Cont, Val_Register);
         Push_Cont(Next);
@@ -173,6 +188,11 @@ package body Interpreter is
       when Var_Exp =>
         Val_Register := Apply_Env(Env_Register, E.Var);
         Apply_Cont;
+      when ZeroP_Exp =>
+        Next := new Cont'(Zero1_Cont, Current_Cont);
+        Push_Cont(Next);
+        Exp_Register := E.Exp1;
+        Value_Of;
       when Proc_Exp =>
         P.Bound_Var := E.Bound_Var;
         P.PBody := E.PBody;

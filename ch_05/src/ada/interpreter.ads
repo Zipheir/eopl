@@ -56,7 +56,8 @@ package Interpreter is
 
   No_Binding_Error: exception;
 
-  type Expr_Kind is (Const_Exp, Var_Exp, Proc_Exp, Call_Exp);
+  type Expr_Kind is (Const_Exp, Var_Exp, ZeroP_Exp, Proc_Exp,
+                     Call_Exp);
 
   type Expression(Kind: Expr_Kind) is
     record
@@ -65,6 +66,8 @@ package Interpreter is
           Num: Integer;
         when Var_Exp =>
           Var: Variable;
+        when ZeroP_Exp =>
+          Exp1: Expr_Ptr;
         when Proc_Exp =>
           Bound_Var: Variable;
           PBody: Expr_Ptr;
@@ -74,11 +77,14 @@ package Interpreter is
       end case;
     end record;
 
-  type Cont_Kind is (Empty_Cont, Rator_Cont, Rand_Cont);
-
+  type Cont_Kind is (Empty_Cont, Zero1_Cont, Rator_Cont, Rand_Cont);
+  type Cont(<>);
+  type Cont_Ptr is access Cont;
   type Cont(Kind: Cont_Kind := Empty_Cont) is
     record
       case Kind is
+        when Zero1_Cont =>
+          Kont: Cont_Ptr;
         when Rator_Cont =>
           Rand: Expr_Ptr;
           Env: Env_Ptr;
@@ -89,12 +95,11 @@ package Interpreter is
       end case;
     end record;
 
-  type Cont_Ptr is access Cont;
-
   Continuation_Error: exception;
 
   procedure Push_Cont(K: in Cont_Ptr);
   function Pop_Cont return Cont_Ptr;
+  function Current_Cont return Cont_Ptr;
   procedure Apply_Cont;
   procedure Apply_Procedure;
   procedure Value_Of;
