@@ -109,25 +109,37 @@ package body Interpreter is
   Cont_Stack_Index : Integer := 0;
 
   procedure Push_Cont(K: in Cont_Ptr) is
+    package Kind_IO is new Ada.Text_IO.Enumeration_IO (Enum => Cont_Kind);
+    Old_SP: Integer := Cont_Stack_Index;
   begin
     Cont_Register(Cont_Stack_Index) := K;
     Cont_Stack_Index := Cont_Stack_Index + 1;
+    Ada.Text_IO.Put("Continuation push, stack next free is now ");
+    Ada.Integer_Text_IO.Put(Cont_Stack_Index, 0);
+    Ada.Text_IO.New_Line;
+    Ada.Text_IO.Put("Top continuation is of type ");
+    Kind_IO.Put(Cont_Register(Old_Sp).Kind);
+    Ada.Text_IO.New_Line;
   end Push_Cont;
 
   function Pop_Cont return Cont_Ptr is
     K: Cont_Ptr;
   begin
-    K := Cont_Register(Cont_Stack_Index);
     Cont_Stack_Index := Cont_Stack_Index - 1;
+    K := Cont_Register(Cont_Stack_Index);
     return K;
   end Pop_Cont;
 
   -- Cont_Register is assumed to hold the rest of the continuation
   -- stack.
-  procedure Apply_Cont(K: in Cont_Ptr) is
-    Next: Cont_Ptr;
+  procedure Apply_Cont is
+    K, Next: Cont_Ptr;
   begin
+    K := Pop_Cont;
     case K.Kind is
+      when Empty_Cont =>
+        Print_Value_Register;
+        Ada.Text_IO.Put_Line("End of computation.");
       when Rator_Cont =>
         Next := new Cont'(Rand_Cont, Val_Register);
         Push_Cont(Next);
@@ -137,23 +149,8 @@ package body Interpreter is
       when Rand_Cont =>
         Proc1_Register := Exp_Val_to_Proc(K.Rator_Val);
         Apply_Procedure;
-      when others =>
-        Ada.Text_IO.Put_Line("Empty continuation!");
-        raise Continuation_Error;
     end case;
   end Apply_Cont;
-
-  procedure Continue is
-    K : Cont_Ptr;
-  begin
-    if Cont_Stack_Index < 0 then
-      Print_Value_Register;
-      Ada.Text_IO.Put_Line("End of computation.");
-    else
-      K := Pop_Cont;
-      Apply_Cont(K);
-    end if;
-  end Continue;
 
   procedure Apply_Procedure is
   begin
@@ -171,12 +168,12 @@ package body Interpreter is
     case E.Kind is
       when Const_Exp =>
         Val_Register := Make_Num_Val(E.Num);
-        Continue;
+        Apply_Cont;
       when Proc_Exp =>
         P.Bound_Var := E.Bound_Var;
         P.PBody := E.PBody;
         Val_Register := Make_Proc_Val(P);
-        Continue;
+        Apply_Cont;
       when Call_Exp =>
         Next := new Cont'(Rator_Cont, E.Rand, Env_Register);
         Push_Cont(Next);
@@ -188,6 +185,7 @@ package body Interpreter is
   procedure Value_of_Program(E: in Expr_Ptr) is
   begin
     Cont_Stack_Index := 0;
+    Push_Cont(new Cont(Empty_Cont));
     Exp_Register := E;
     Env_Register := Init_Env;
     Value_Of;

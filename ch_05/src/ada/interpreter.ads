@@ -93,8 +93,7 @@ package Interpreter is
 
   procedure Push_Cont(K: in Cont_Ptr);
   function Pop_Cont return Cont_Ptr;
-  procedure Apply_Cont(K: in Cont_Ptr);
-  procedure Continue;
+  procedure Apply_Cont;
   procedure Apply_Procedure;
   procedure Value_Of;
   procedure Value_of_Program(E: in Expr_Ptr);
