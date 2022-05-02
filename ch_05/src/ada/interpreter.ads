@@ -1,10 +1,13 @@
 package Interpreter is
+  -- A la BASIC.
   type Variable is new Character;
 
   -- Procedures
 
-  type Expression;
+  type Expression(<>);
   type Expr_Ptr is access Expression;
+  type Frame;
+  type Env_Ptr is access Frame;
 
   type Proc is
     record
@@ -15,7 +18,7 @@ package Interpreter is
 
   type Exp_Val_Kind is (Num_Val, Bool_Val, Proc_Val);
 
-  type Exp_Val(Kind: Exp_Val_Kind) is
+  type Exp_Val(Kind: Exp_Val_Kind := Num_Val) is
     record
       case Kind is
         when Num_Val =>
@@ -33,22 +36,27 @@ package Interpreter is
   function Exp_Val_to_Num(V: in Exp_Val) return Integer;
   function Exp_Val_to_Bool(V: in Exp_Val) return Boolean;
   function Exp_Val_to_Proc(V: in Exp_Val) return Proc;
+  procedure Print_Value_Register;
 
-   type Frame is
+  -- Environments
+  -- It would be nice to use a general list type here.
+
+  type Frame is
     record
       Var: Variable;
       Val: Exp_Val;
+      Rest: Env_Ptr;
     end record;
 
-  package My_Lists is new Lists(Frame); use My_Lists;
-  type Environment is new List;
-  type Env_Ptr is access Environment;
-
-  function Extend_Env(V: Variable, A: Exp_Val, E: Env_Ptr) return Env_Ptr;
-  function Apply_Env(E: Env_Ptr, V: Variable) return Value;
+  function Extend_Env(V: in Variable; A: in Exp_Val; E: in Env_Ptr)
+    return Env_Ptr;
+  function Apply_Env(E: in Env_Ptr; V: in Variable) return Exp_Val;
   function Init_Env return Env_Ptr;
+  procedure Report_No_Binding_Found(V: in Variable);
 
-  type Expr_Kind is (Const_Exp, Var_Exp, Diff_Exp, Proc_Exp, Call_Exp);
+  No_Binding_Error: exception;
+
+  type Expr_Kind is (Const_Exp, Proc_Exp, Call_Exp);
 
   type Expression(Kind: Expr_Kind) is
     record
@@ -63,10 +71,10 @@ package Interpreter is
           Rand: Expr_Ptr;
       end case;
     end record;
-  
-  type Cont_Kind is (Rator_Cont, Rand_Cont);
-  
-  type Cont(Kind: Cont_Kind := End_Cont) is
+
+  type Cont_Kind is (Empty_Cont, Rator_Cont, Rand_Cont);
+
+  type Cont(Kind: Cont_Kind := Empty_Cont) is
     record
       case Kind is
         when Rator_Cont =>
@@ -74,11 +82,17 @@ package Interpreter is
           Env: Env_Ptr;
         when Rand_Cont =>
           Rator_Val: Exp_Val;
+        when others =>
+          null;
       end case;
     end record;
-    
+
   type Cont_Ptr is access Cont;
 
+  Continuation_Error: exception;
+
+  procedure Push_Cont(K: in Cont_Ptr);
+  function Pop_Cont return Cont_Ptr;
   procedure Apply_Cont(K: in Cont_Ptr);
   procedure Continue;
   procedure Apply_Procedure;
