@@ -67,7 +67,7 @@ package Interpreter is
         when Var_Exp =>
           Var: Variable;
         when ZeroP_Exp =>
-          Exp1: Expr_Ptr;
+          ZExp: Expr_Ptr;
         when Proc_Exp =>
           Bound_Var: Variable;
           PBody: Expr_Ptr;
@@ -82,12 +82,12 @@ package Interpreter is
   type Cont_Ptr is access Cont;
   type Cont(Kind: Cont_Kind := Empty_Cont) is
     record
+      Env: Env_Ptr;
       case Kind is
         when Zero1_Cont =>
-          Kont: Cont_Ptr;
+          ZKont: Cont_Ptr;
         when Rator_Cont =>
           Rand: Expr_Ptr;
-          Env: Env_Ptr;
         when Rand_Cont =>
           Rator_Val: Exp_Val;
         when others =>

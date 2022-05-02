@@ -148,7 +148,7 @@ package body Interpreter is
         Print_Value_Register;
         Ada.Text_IO.Put_Line("End of computation.");
       when Zero1_Cont =>
-        Push_Cont(K.Kont);
+        Push_Cont(K.ZKont);
         N := Exp_Val_to_Num(Val_Register);
         if N = 0 then
           Val_Register := Make_Bool_Val(True);
@@ -157,7 +157,7 @@ package body Interpreter is
         end if;
         Apply_Cont;
       when Rator_Cont =>
-        Next := new Cont'(Rand_Cont, Val_Register);
+        Next := new Cont'(Rand_Cont, null, Val_Register);
         Push_Cont(Next);
         Env_Register := K.Env;
         Exp_Register := K.Rand;
@@ -189,9 +189,9 @@ package body Interpreter is
         Val_Register := Apply_Env(Env_Register, E.Var);
         Apply_Cont;
       when ZeroP_Exp =>
-        Next := new Cont'(Zero1_Cont, Current_Cont);
+        Next := new Cont'(Zero1_Cont, null, Current_Cont);
         Push_Cont(Next);
-        Exp_Register := E.Exp1;
+        Exp_Register := E.ZExp;
         Value_Of;
       when Proc_Exp =>
         P.Bound_Var := E.Bound_Var;
@@ -199,7 +199,7 @@ package body Interpreter is
         Val_Register := Make_Proc_Val(P);
         Apply_Cont;
       when Call_Exp =>
-        Next := new Cont'(Rator_Cont, E.Rand, Env_Register);
+        Next := new Cont'(Rator_Cont, Env_Register, E.Rand);
         Push_Cont(Next);
         Exp_Register := E.Rator;
         Value_Of;
