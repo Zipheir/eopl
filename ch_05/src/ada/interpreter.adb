@@ -140,7 +140,7 @@ package body Interpreter is
   -- stack.
   procedure Apply_Cont is
     K, Next: Cont_Ptr;
-    N: Integer;
+    M, N: Integer;
   begin
     K := Pop_Cont;
     case K.Kind is
@@ -155,6 +155,18 @@ package body Interpreter is
         else
           Val_Register := Make_Bool_Val(False);
         end if;
+        Apply_Cont;
+      when Diff1_Cont =>
+        Next := new Cont'(Diff2_Cont, null, Val_Register, K.D1Kont);
+        Push_Cont(Next);
+        Exp_Register := K.DExp;
+        Env_Register := K.Env;
+        Value_Of;
+      when Diff2_Cont =>
+        Push_Cont(K.D2Kont);
+        M := Exp_Val_to_Num(K.DVal);
+        N := Exp_Val_to_Num(Val_Register);
+        Val_Register := Make_Num_Val(M - N);
         Apply_Cont;
       when Rator_Cont =>
         Next := new Cont'(Rand_Cont, null, Val_Register);
@@ -192,6 +204,11 @@ package body Interpreter is
         Next := new Cont'(Zero1_Cont, null, Current_Cont);
         Push_Cont(Next);
         Exp_Register := E.ZExp;
+        Value_Of;
+      when Diff_Exp =>
+        Next := new Cont'(Diff1_Cont, null, E.DExp2, Current_Cont);
+        Push_Cont(Next);
+        Exp_Register := E.DExp1;
         Value_Of;
       when Proc_Exp =>
         P.Bound_Var := E.Bound_Var;
