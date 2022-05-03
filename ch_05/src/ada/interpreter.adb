@@ -206,7 +206,6 @@ package body Interpreter is
         Env_Register := Extend_Env(K.LVar, Val_Register, K.Env);
         Value_Of;
       when If_Test_Cont =>
-        Print_Value_Register;
         Push_Cont(K.IKont);
         if Exp_Val_to_Bool(Val_Register) then
           Exp_Register := K.Con;
