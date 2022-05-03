@@ -8,22 +8,44 @@ package body Interpreter is
       return Env_Ptr is
     F: Env_Ptr;
   begin
-    F := new Frame'(Var => V, Val => A, Rest => E);
+    F := new Frame'(Kind => Normal, Var => V, Val => A, Rest => E);
     return F;
   end Extend_Env;
 
-  function Apply_Env(E: in Env_Ptr; V: in Variable) return Exp_Val is
-    P: Env_Ptr := E;
+  function Extend_Env_Rec(Name: in Variable; V: in Variable;
+      B: in Expr_Ptr; E: in Env_Ptr) return Env_Ptr is
+    EP: Env_Ptr;
   begin
-    if P = null then
+    EP := new Frame'(Kind => Recursive, Name => Name, BVar => V,
+            PBody => B, Rest => E);
+    return EP;
+  end Extend_Env_Rec;
+
+  function Apply_Env(E: in Env_Ptr; V: in Variable) return Exp_Val is
+    EP: Env_Ptr := E;
+    F: Proc;
+  begin
+    if EP = null then
       Report_No_Binding_Found(V);
     end if;
 
-    if P.Var = V then
-      return P.Val;
-    else
-      return Apply_Env(P.Rest, V);
-    end if;
+    case EP.Kind is
+      when Normal =>
+        if EP.Var = V then
+          return EP.Val;
+        else
+          return Apply_Env(EP.Rest, V);
+        end if;
+      when Recursive =>
+        if EP.Name = V then
+          F.Bound_Var := EP.BVar;
+          F.PBody := EP.PBody;
+          F.Saved_Env := EP;
+          return Make_Proc_Val(F);
+        else
+          return Apply_Env(EP.Rest, V);
+        end if;
+    end case;
   end Apply_Env;
 
   procedure Report_No_Binding_Found(V: in Variable) is
@@ -36,9 +58,9 @@ package body Interpreter is
 
   function Init_Env return Env_Ptr is
   begin
-    return new Frame'('I', Make_Num_Val(1),
-             new Frame'('V', Make_Num_Val(5),
-               new Frame'('X', Make_Num_Val(10), null)));
+    return Extend_Env('I', Make_Num_Val(1),
+             Extend_Env('V', Make_Num_Val(5),
+               Extend_Env('X', Make_Num_Val(10), null)));
   end Init_Env;
 
   -- Expressed values
@@ -226,6 +248,11 @@ package body Interpreter is
                   Current_Cont);
         Push_Cont(Next);
         Exp_Register := E.LExp;
+        Value_Of;
+      when Letrec_Exp =>
+        Exp_Register := E.LR_Body;
+        Env_Register := Extend_Env_Rec(E.PName, E.LR_BVar, E.LR_PBody,
+                          Env_Register);
         Value_Of;
       when Call_Exp =>
         Next := new Cont'(Rator_Cont, Env_Register, E.Rand);

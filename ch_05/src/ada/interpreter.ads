@@ -1,3 +1,7 @@
+-- The names of the Expression and Cont variant record fields
+-- are pretty horrible, since they can't overlap.  I think the
+-- idiomatic thing would be to use subtyping instead.
+
 package Interpreter is
   -- A la BASIC.
   type Variable is new Character;
@@ -41,15 +45,26 @@ package Interpreter is
   -- Environments
   -- It would be nice to use a general list type here.
 
-  type Frame is
+  type Frame_Kind is (Normal, Recursive);
+
+  type Frame(Kind: Frame_Kind) is
     record
-      Var: Variable;
-      Val: Exp_Val;
       Rest: Env_Ptr;
+      case Kind is
+        when Normal =>
+          Var: Variable;
+          Val: Exp_Val;
+        when Recursive =>
+          Name: Variable;
+          BVar: Variable;
+          PBody: Expr_Ptr;
+      end case;
     end record;
 
   function Extend_Env(V: in Variable; A: in Exp_Val; E: in Env_Ptr)
     return Env_Ptr;
+  function Extend_Env_Rec(Name: in Variable; V: in Variable;
+    B: in Expr_Ptr; E: in Env_Ptr) return Env_Ptr;
   function Apply_Env(E: in Env_Ptr; V: in Variable) return Exp_Val;
   function Init_Env return Env_Ptr;
   procedure Report_No_Binding_Found(V: in Variable);
@@ -57,7 +72,7 @@ package Interpreter is
   No_Binding_Error: exception;
 
   type Expr_Kind is (Const_Exp, Var_Exp, ZeroP_Exp, Proc_Exp, Let_Exp,
-                     Diff_Exp, Call_Exp);
+                     Diff_Exp, Call_Exp, Letrec_Exp);
 
   type Expression(Kind: Expr_Kind) is
     record
@@ -77,6 +92,11 @@ package Interpreter is
           LVar: Variable;
           LExp: Expr_Ptr;
           LBody: Expr_Ptr;
+        when Letrec_Exp =>
+          PName: Variable;
+          LR_BVar: Variable;
+          LR_PBody: Expr_Ptr;
+          LR_Body: Expr_Ptr;
         when Call_Exp =>
           Rator: Expr_Ptr;
           Rand: Expr_Ptr;

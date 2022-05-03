@@ -64,4 +64,12 @@ begin
            new Expression'(Var_Exp, 'A'),
            new Expression'(Var_Exp, 'X')));
   Test_Num_Exp("let application with diff body", 1, E);
+
+  -- letrec F (X) = X in (F 1)
+  E := new Expression'(Letrec_Exp, 'F', 'X',
+         new Expression'(Var_Exp, 'X'),
+         new Expression'(Call_Exp,
+           new Expression'(Var_Exp, 'F'),
+           new Expression'(Const_Exp, 1)));
+  Test_Num_Exp("basic letrec (no recursion)", 1, E);
 end Run_Tests;
