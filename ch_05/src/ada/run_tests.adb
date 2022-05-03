@@ -49,4 +49,19 @@ begin
            new Expression'(Var_Exp, 'X'),
            new Expression'(Var_Exp, 'I'));
   Test_Num_Exp("diff variables", 9, E);
+
+  -- let A = 4 in A
+  E := new Expression'(Let_Exp, 'A',
+        new Expression'(Const_Exp, 4),
+        new Expression'(Var_Exp, 'A'));
+  Test_Num_Exp("let constant", 4, E);
+
+  -- let A = (add1 X) in -(A, X)
+  E := new Expression'(Let_Exp, 'A',
+         new Expression'(Call_Exp, Add1,
+           new Expression'(Var_Exp, 'X')),
+         new Expression'(Diff_Exp,
+           new Expression'(Var_Exp, 'A'),
+           new Expression'(Var_Exp, 'X')));
+  Test_Num_Exp("let application with diff body", 1, E);
 end Run_Tests;

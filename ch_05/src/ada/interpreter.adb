@@ -177,6 +177,11 @@ package body Interpreter is
       when Rand_Cont =>
         Proc1_Register := Exp_Val_to_Proc(K.Rator_Val);
         Apply_Procedure;
+      when Let_Exp_Cont =>
+        Push_Cont(K.LKont);
+        Exp_Register := K.LBody;
+        Env_Register := Extend_Env(K.LVar, Val_Register, K.Env);
+        Value_Of;
     end case;
   end Apply_Cont;
 
@@ -216,6 +221,12 @@ package body Interpreter is
         P.PBody := E.PBody;
         Val_Register := Make_Proc_Val(P);
         Apply_Cont;
+      when Let_Exp =>
+        Next := new Cont'(Let_Exp_Cont, Env_Register, E.LVar, E.LBody,
+                  Current_Cont);
+        Push_Cont(Next);
+        Exp_Register := E.LExp;
+        Value_Of;
       when Call_Exp =>
         Next := new Cont'(Rator_Cont, Env_Register, E.Rand);
         Push_Cont(Next);
