@@ -72,7 +72,7 @@ package Interpreter is
   No_Binding_Error: exception;
 
   type Expr_Kind is (Const_Exp, Var_Exp, ZeroP_Exp, Proc_Exp, Let_Exp,
-                     Diff_Exp, Call_Exp, Letrec_Exp);
+                     Diff_Exp, Call_Exp, Letrec_Exp, If_Exp);
 
   type Expression(Kind: Expr_Kind) is
     record
@@ -97,6 +97,8 @@ package Interpreter is
           LR_BVar: Variable;
           LR_PBody: Expr_Ptr;
           LR_Body: Expr_Ptr;
+        when If_Exp =>
+          Test, Con, Alt: Expr_Ptr;
         when Call_Exp =>
           Rator: Expr_Ptr;
           Rand: Expr_Ptr;
@@ -104,7 +106,7 @@ package Interpreter is
     end record;
 
   type Cont_Kind is (Empty_Cont, Zero1_Cont, Rator_Cont, Rand_Cont,
-                     Diff1_Cont, Diff2_Cont, Let_Exp_Cont);
+                     Diff1_Cont, Diff2_Cont, Let_Exp_Cont, If_Test_Cont);
   type Cont(<>);
   type Cont_Ptr is access Cont;
   type Cont(Kind: Cont_Kind := Empty_Cont) is
@@ -127,6 +129,9 @@ package Interpreter is
           LVar: Variable;
           LBody: Expr_Ptr;
           LKont: Cont_Ptr;
+        when If_Test_Cont =>
+          Con, Alt: Expr_Ptr;
+          IKont: Cont_Ptr;
         when others =>
           null;
       end case;

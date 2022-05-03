@@ -204,6 +204,16 @@ package body Interpreter is
         Exp_Register := K.LBody;
         Env_Register := Extend_Env(K.LVar, Val_Register, K.Env);
         Value_Of;
+      when If_Test_Cont =>
+        Print_Value_Register;
+        Push_Cont(K.IKont);
+        if Exp_Val_to_Bool(Val_Register) then
+          Exp_Register := K.Con;
+        else
+          Exp_Register := K.Alt;
+        end if;
+        Env_Register := K.Env;
+        Value_Of;
     end case;
   end Apply_Cont;
 
@@ -253,6 +263,12 @@ package body Interpreter is
         Exp_Register := E.LR_Body;
         Env_Register := Extend_Env_Rec(E.PName, E.LR_BVar, E.LR_PBody,
                           Env_Register);
+        Value_Of;
+      when If_Exp =>
+        Next := new Cont'(If_Test_Cont, Env_Register, E.Con, E.Alt,
+                  Current_Cont);
+        Push_Cont(Next);
+        Exp_Register := E.Test;
         Value_Of;
       when Call_Exp =>
         Next := new Cont'(Rator_Cont, Env_Register, E.Rand);
