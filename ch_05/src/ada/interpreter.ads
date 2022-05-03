@@ -112,5 +112,5 @@ package Interpreter is
   procedure Apply_Cont;
   procedure Apply_Procedure;
   procedure Value_Of;
-  procedure Value_of_Program(E: in Expr_Ptr);
+  function Value_of_Program(E: in Expr_Ptr) return Exp_Val;
 end Interpreter;

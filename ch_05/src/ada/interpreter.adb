@@ -223,13 +223,14 @@ package body Interpreter is
     end case;
   end Value_Of;
 
-  procedure Value_of_Program(E: in Expr_Ptr) is
+  function Value_of_Program(E: in Expr_Ptr) return Exp_Val is
   begin
     Cont_Stack_Index := 0;
     Push_Cont(new Cont(Empty_Cont));
     Exp_Register := E;
     Env_Register := Init_Env;
     Value_Of;
+    return Val_Register;
   end Value_of_Program;
 
 end Interpreter;
