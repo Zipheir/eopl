@@ -117,8 +117,10 @@ package Interpreter is
           ZKont: Cont_Ptr;
         when Rator_Cont =>
           Rand: Expr_Ptr;
+          TKont: Cont_Ptr;
         when Rand_Cont =>
           Rator_Val: Exp_Val;
+          AKont: Cont_Ptr;
         when Diff1_Cont =>
           DExp: Expr_Ptr;
           D1Kont: Cont_Ptr;

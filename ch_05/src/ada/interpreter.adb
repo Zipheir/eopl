@@ -191,12 +191,13 @@ package body Interpreter is
         Val_Register := Make_Num_Val(M - N);
         Apply_Cont;
       when Rator_Cont =>
-        Next := new Cont'(Rand_Cont, null, Val_Register);
+        Next := new Cont'(Rand_Cont, null, Val_Register, K.TKont);
         Push_Cont(Next);
         Env_Register := K.Env;
         Exp_Register := K.Rand;
         Value_Of;
       when Rand_Cont =>
+        Push_Cont(K.AKont);
         Proc1_Register := Exp_Val_to_Proc(K.Rator_Val);
         Apply_Procedure;
       when Let_Exp_Cont =>
@@ -271,7 +272,8 @@ package body Interpreter is
         Exp_Register := E.Test;
         Value_Of;
       when Call_Exp =>
-        Next := new Cont'(Rator_Cont, Env_Register, E.Rand);
+        Next := new Cont'(Rator_Cont, Env_Register, E.Rand,
+                  Current_Cont);
         Push_Cont(Next);
         Exp_Register := E.Rator;
         Value_Of;
