@@ -206,7 +206,8 @@ package body Interpreter is
         Exp_Register := E.ZExp;
         Value_Of;
       when Diff_Exp =>
-        Next := new Cont'(Diff1_Cont, null, E.DExp2, Current_Cont);
+        Next := new Cont'(Diff1_Cont, Env_Register, E.DExp2,
+                  Current_Cont);
         Push_Cont(Next);
         Exp_Register := E.DExp1;
         Value_Of;
