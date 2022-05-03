@@ -72,4 +72,33 @@ begin
            new Expression'(Var_Exp, 'F'),
            new Expression'(Const_Exp, 1)));
   Test_Num_Exp("basic letrec (no recursion)", 1, E);
+
+  -- if zero?(0) 2 5
+  E := new Expression'(If_Exp,
+         new Expression'(ZeroP_Exp, new Expression'(Const_Exp, 0)),
+         new Expression'(Const_Exp, 2),
+         new Expression'(Const_Exp, 5));
+  Test_Num_Exp("basic if/zero? true", 2, E);
+
+  -- if zero?(1) 2 5
+  E := new Expression'(If_Exp,
+         new Expression'(ZeroP_Exp, new Expression'(Const_Exp, 1)),
+         new Expression'(Const_Exp, 2),
+         new Expression'(Const_Exp, 5));
+  Test_Num_Exp("basic if/zero? false", 5, E);
+
+  -- letrec F (A) = if zero?(A) 0 (F -(A, 1)) in (F 3)
+  E := new Expression'(Letrec_Exp, 'F', 'A',
+         new Expression'(If_Exp,
+           new Expression'(ZeroP_Exp, new Expression'(Var_Exp, 'A')),
+           new Expression'(Const_Exp, 0),
+           new Expression'(Call_Exp,
+             new Expression'(Var_Exp, 'F'),
+             new Expression'(Diff_Exp,
+               new Expression'(Var_Exp, 'A'),
+               new Expression'(Const_Exp, 1)))),
+         new Expression'(Call_Exp,
+           new Expression'(Var_Exp, 'F'),
+           new Expression'(Const_Exp, 3)));
+  Test_Num_Exp("recursive letrec app", 0, E);
 end Run_Tests;
