@@ -92,24 +92,12 @@
 ;;
 ;; Backtracks through the continuation stack until a try-cont
 ;; is found, then runs the included handler.
-;;
-;; This would be more compact if continuations used the stack
-;; representation of Ex. 5.15.  As it is, every continuation
-;; variety has to be considered.
 (define (apply-handler val cont)
   (pmatch cont
-    ((try-cont ,var ,hexp ,senv ,k)
+    (() (report-uncaught-exception))
+    (((try-cont ,var ,hexp ,senv) . ,k)
      (value-of/k hexp (extend-env var val senv) k))
-    ((end-cont ?) (report-uncaught-exception))
-    ((zero1-cont ,k) (apply-handler val k))
-    ((if-test-cont ? ? ? ,k) (apply-handler val k))
-    ((let-exp-cont ? ? ? ,k) (apply-handler val k))
-    ((diff1-cont ? ? ,k) (apply-handler val k))
-    ((diff2-cont ? ? ,k) (apply-handler val k))
-    ((rator-cont ? ? ,k) (apply-handler val k))
-    ((rand-cont ? ? ,k) (apply-handler val k))
-    ((raise1-cont ,k) (apply-handler val k))
-    (? (error 'apply-handler "invalid continuation" cont))))
+    ((? . ,k) (apply-handler val k))))
 
 ;; report-uncaught-exception : () -> [Bottom]
 (define (report-uncaught-exception)
@@ -120,29 +108,27 @@
 ;; apply-cont : Cont x Val -> Final-answer
 (define (apply-cont cont val)
   (pmatch cont
-    ((end-cont ,print-msg)
-     (when print-msg (display "End of computation.\n"))
-     val)
-    ((zero1-cont ,k)
+    (() val)
+    ((zero1-cont . ,k)
      (apply-cont k `(bool-val ,(zero? (expval->num val)))))
-    ((if-test-cont ,exp2 ,exp3 ,env ,k)
+    (((if-test-cont ,exp2 ,exp3 ,env) . ,k)
      (if (expval->bool val)
          (value-of/k exp2 env k)
          (value-of/k exp3 env k)))
-    ((let-exp-cont ,var ,body ,env ,k)
+    (((let-exp-cont ,var ,body ,env) . ,k)
      (value-of/k body (extend-env var val env) k))
-    ((diff1-cont ,exp2 ,env ,k)
-     (value-of/k exp2 env `(diff2-cont ,val ,env ,k)))
-    ((diff2-cont ,val1 ,env ,k)
+    (((diff1-cont ,exp2 ,env) . ,k)
+     (value-of/k exp2 env `((diff2-cont ,val ,env) . ,k)))
+    (((diff2-cont ,val1 ,env) . ,k)
      (let ((num1 (expval->num val1))
            (num2 (expval->num val)))
        (apply-cont k `(num-val ,(- num1 num2)))))
-    ((rator-cont ,rand ,env ,k)
-     (value-of/k rand env `(rand-cont ,val ,env ,k)))
-    ((rand-cont ,vrat ,env ,k)
+    (((rator-cont ,rand ,env) . ,k)
+     (value-of/k rand env `((rand-cont ,val ,env) . ,k)))
+    (((rand-cont ,vrat ,env) . ,k)
      (apply-procedure/k (expval->proc vrat) val k))
-    ((try-cont ? ? ? ,k) (apply-cont k val))
-    ((raise1-cont ,k) (apply-handler val k))
+    (((try-cont ? ? ?) . ,k) (apply-cont k val))
+    ((raise1-cont . ,k) (apply-handler val k))
     (? (error 'apply-cont "invalid continuation" cont))))
 
 ;;;; Interpreter
@@ -151,7 +137,7 @@
 (define (value-of-program pgm print-msg)
   (pmatch pgm
     ((program ,exp1)
-     (value-of/k exp1 (init-env) `(end-cont ,print-msg)))))
+     (value-of/k exp1 (init-env) '()))))
 
 ;; value-of/k : Exp x Env x Cont -> Final-answer
 (define (value-of/k exp env cont)
@@ -160,23 +146,23 @@
     ((var-exp ,var) (apply-cont cont (apply-env env var)))
     ((proc-exp ,var ,body)
      (apply-cont cont `(proc-val ,(procedure var body env))))
-    ((zero?-exp ,exp1) (value-of/k exp1 env `(zero1-cont ,cont)))
+    ((zero?-exp ,exp1) (value-of/k exp1 env `(zero1-cont . ,cont)))
     ((diff-exp ,exp1 ,exp2)
-     (value-of/k exp1 env `(diff1-cont ,exp2 ,env ,cont)))
+     (value-of/k exp1 env `((diff1-cont ,exp2 ,env) . ,cont)))
     ((if-exp ,exp1 ,exp2 ,exp3)
-     (value-of/k exp1 env `(if-test-cont ,exp2 ,exp3 ,env ,cont)))
+     (value-of/k exp1 env `((if-test-cont ,exp2 ,exp3 ,env) . ,cont)))
     ((let-exp ,var ,exp1 ,body)
-     (value-of/k exp1 env `(let-exp-cont ,var ,body ,env ,cont)))
+     (value-of/k exp1 env `((let-exp-cont ,var ,body ,env) . ,cont)))
     ((letrec-exp ,p-name ,b-var ,p-body ,lr-body)
      (value-of/k lr-body
                  (extend-env-rec p-name b-var p-body env)
                  cont))
     ((call-exp ,rator ,rand)
-     (value-of/k rator env `(rator-cont ,rand ,env ,cont)))
+     (value-of/k rator env `((rator-cont ,rand ,env) . ,cont)))
     ((try-exp ,exp1 ,var ,hexp)
-     (value-of/k exp1 env `(try-cont ,var ,hexp ,env ,cont)))
+     (value-of/k exp1 env `((try-cont ,var ,hexp ,env) . ,cont)))
     ((raise-exp ,exp1)
-     (value-of/k exp1 env `(raise1-cont ,cont)))
+     (value-of/k exp1 env `(raise1-cont . ,cont)))
     (? (error 'value-of/k "invalid expression" exp))))
 
 ;; Parser for a simple S-exp representation.
