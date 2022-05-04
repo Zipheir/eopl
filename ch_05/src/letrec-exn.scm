@@ -36,11 +36,11 @@
 (define (procedure b-var body saved-env)
   (list 'proc b-var body saved-env))
 
-;; apply-procedure/k : Proc x Ref x Cont -> Final-answer
-(define (apply-procedure/k proc1 val cont)
+;; apply-procedure/k : Proc x Ref x Cont x Cont -> Final-answer
+(define (apply-procedure/k proc1 val success failure)
   (pmatch proc1
     ((proc ,var ,body ,env)
-     (value-of/k body (extend-env var val env) cont))))
+     (value-of/k body (extend-env var val env) success failure))))
 
 ;;;; Environments
 
@@ -89,15 +89,14 @@
 ;;;; Exception handling
 
 ;; apply-handler : Exp-val x Cont -> Final-answer
-;;
-;; Backtracks through the continuation stack until a try-cont
-;; is found, then runs the included handler.
-(define (apply-handler val cont)
-  (pmatch cont
+(define (apply-handler val failure)
+  (pmatch failure
     (() (report-uncaught-exception))
-    (((try-cont ,var ,hexp ,senv) . ,k)
-     (value-of/k hexp (extend-env var val senv) k))
-    ((? . ,k) (apply-handler val k))))
+    (((try-cont ,var ,hexp ,senv ,scont) . ,fail-rest)
+     (value-of/k hexp (extend-env var val senv) scont fail-rest))
+    (? (error 'apply-handler
+    	      "invalid failure continuation"
+    	      cont))))
 
 ;; report-uncaught-exception : () -> [Bottom]
 (define (report-uncaught-exception)
@@ -105,64 +104,89 @@
 
 ;;;; Continuations
 
-;; apply-cont : Cont x Val -> Final-answer
-(define (apply-cont cont val)
+;; apply-cont : Cont x Val x Cont -> Final-answer
+(define (apply-cont cont val failure)
   (pmatch cont
     (() val)
     ((zero1-cont . ,k)
-     (apply-cont k `(bool-val ,(zero? (expval->num val)))))
+     (apply-cont k
+                 `(bool-val ,(zero? (expval->num val)))
+                 failure))
     (((if-test-cont ,exp2 ,exp3 ,env) . ,k)
      (if (expval->bool val)
-         (value-of/k exp2 env k)
-         (value-of/k exp3 env k)))
+         (value-of/k exp2 env k failure)
+         (value-of/k exp3 env k failure)))
     (((let-exp-cont ,var ,body ,env) . ,k)
-     (value-of/k body (extend-env var val env) k))
+     (value-of/k body (extend-env var val env) k failure))
     (((diff1-cont ,exp2 ,env) . ,k)
-     (value-of/k exp2 env `((diff2-cont ,val ,env) . ,k)))
+     (value-of/k exp2 env `((diff2-cont ,val ,env) . ,k) failure))
     (((diff2-cont ,val1 ,env) . ,k)
      (let ((num1 (expval->num val1))
            (num2 (expval->num val)))
-       (apply-cont k `(num-val ,(- num1 num2)))))
+       (apply-cont k `(num-val ,(- num1 num2)) failure)))
     (((rator-cont ,rand ,env) . ,k)
-     (value-of/k rand env `((rand-cont ,val ,env) . ,k)))
+     (value-of/k rand env `((rand-cont ,val ,env) . ,k) failure))
     (((rand-cont ,vrat ,env) . ,k)
-     (apply-procedure/k (expval->proc vrat) val k))
-    (((try-cont ? ? ?) . ,k) (apply-cont k val))
+     (apply-procedure/k (expval->proc vrat) val k failure))
+    (((try-cont ? ? ? ?) . ,k)
+     (error 'apply-cont "found try-cont (can't happen!)" cont))
     ((raise1-cont . ,k) (apply-handler val k))
     (? (error 'apply-cont "invalid continuation" cont))))
 
 ;;;; Interpreter
 
-;; value-of-program : Program x Bool -> Final-answer
-(define (value-of-program pgm print-msg)
+;; value-of-program : Program -> Final-answer
+(define (value-of-program pgm)
   (pmatch pgm
     ((program ,exp1)
-     (value-of/k exp1 (init-env) '()))))
+     (value-of/k exp1 (init-env) '() '()))))
 
-;; value-of/k : Exp x Env x Cont -> Final-answer
-(define (value-of/k exp env cont)
+;; value-of/k : Exp x Env x Cont x Cont -> Final-answer
+(define (value-of/k exp env success failure)
   (pmatch exp
-    ((const-exp ,n) (apply-cont cont `(num-val ,n)))
-    ((var-exp ,var) (apply-cont cont (apply-env env var)))
+    ((const-exp ,n) (apply-cont success `(num-val ,n) failure))
+    ((var-exp ,var) (apply-cont success (apply-env env var) failure))
     ((proc-exp ,var ,body)
-     (apply-cont cont `(proc-val ,(procedure var body env))))
-    ((zero?-exp ,exp1) (value-of/k exp1 env `(zero1-cont . ,cont)))
+     (apply-cont success
+                 `(proc-val ,(procedure var body env))
+                 failure))
+    ((zero?-exp ,exp1)
+     (value-of/k exp1 env `(zero1-cont . ,success) failure))
     ((diff-exp ,exp1 ,exp2)
-     (value-of/k exp1 env `((diff1-cont ,exp2 ,env) . ,cont)))
+     (value-of/k exp1
+                 env
+                 `((diff1-cont ,exp2 ,env) . ,success)
+                 failure))
     ((if-exp ,exp1 ,exp2 ,exp3)
-     (value-of/k exp1 env `((if-test-cont ,exp2 ,exp3 ,env) . ,cont)))
+     (value-of/k exp1
+                 env
+                 `((if-test-cont ,exp2 ,exp3 ,env) . ,success)
+                 failure))
     ((let-exp ,var ,exp1 ,body)
-     (value-of/k exp1 env `((let-exp-cont ,var ,body ,env) . ,cont)))
+     (value-of/k exp1
+                 env
+                 `((let-exp-cont ,var ,body ,env) . ,success)
+                 failure))
     ((letrec-exp ,p-name ,b-var ,p-body ,lr-body)
      (value-of/k lr-body
                  (extend-env-rec p-name b-var p-body env)
-                 cont))
+                 success
+                 failure))
     ((call-exp ,rator ,rand)
-     (value-of/k rator env `((rator-cont ,rand ,env) . ,cont)))
+     (value-of/k rator
+                 env
+                 `((rator-cont ,rand ,env) . ,success)
+                 failure))
     ((try-exp ,exp1 ,var ,hexp)
-     (value-of/k exp1 env `((try-cont ,var ,hexp ,env) . ,cont)))
+     (value-of/k exp1
+                 env
+                 success
+                 `((try-cont ,var ,hexp ,env ,success) . ,failure)))
     ((raise-exp ,exp1)
-     (value-of/k exp1 env `(raise1-cont . ,cont)))
+     (value-of/k exp1
+                 env
+                 `(raise1-cont . ,failure)
+                 #f))  ; discarded
     (? (error 'value-of/k "invalid expression" exp))))
 
 ;; Parser for a simple S-exp representation.
@@ -191,15 +215,15 @@
 (define (parse-program sexp)
   (list 'program (parse sexp)))
 
-;; run : List x Bool -> Final-answer
-(define (run sexp print-msg)
-  (value-of-program (parse-program sexp) print-msg))
+;; run : List -> Final-answer
+(define (run sexp)
+  (value-of-program (parse-program sexp)))
 
 ;;;; Tests
 
 (define (run-tests)
   (define (eval-to-num exp)
-    (expval->num (run exp #f)))
+    (expval->num (run exp)))
 
   (test 5 (eval-to-num '5))
   (test 5 (eval-to-num 'v))
