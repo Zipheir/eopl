@@ -135,3 +135,33 @@ be careful that the assignments take place in the right order if any
 registers are used more than once.
 
 See src/letrec-reg.scm for the registerized interpreter.
+
+## 5.4 Exceptions
+
+This section extends the language above with exception handling.
+Here are the new forms:
+
+Expression ::= try Expression catch (Identifier) Expression
+               [try-exp (exp1 var handler-exp)]
+
+           ::= raise Expression
+               [raise-exp (exp1)]
+
+A try expression installs a new exception handler and evaluates
+its body expression.  If this evaluation proceeds without an exception
+being raised, then its value is the value of the try expression.
+
+A raise expression evaluates its expression and raises an exception
+containing that value; in other words, the most recently installed
+exception handler is invoked with its variable bound to that value.
+If the handler returns a value, it becomes the value of the try
+expression that caused the exception; alternatively, the handler
+can propagate the exception to the next handler with another raise.
+
+Implementing this for the CPS interpreter requires two new kinds of
+continuation:
+
+try-cont   : Var x Exp x Env x Cont -> Cont
+raise-cont : Cont -> Cont
+
+See src/letrec-exn.scm for an implementation.
