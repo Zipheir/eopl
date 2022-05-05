@@ -97,21 +97,29 @@
 ;; representation of Ex. 5.15.  As it is, every continuation
 ;; variety has to be considered.
 (define (apply-handler val cont)
-  (pmatch cont
-    ((try-cont ,var ,hexp ,senv ,k)
-     (value-of/k hexp (extend-env var val senv) k))
-    ((end-cont ?) (report-uncaught-exception))
-    ((zero1-cont ,k) (apply-handler val k))
-    ((if-test-cont ? ? ? ,k) (apply-handler val k))
-    ((let-exp-cont ? ? ? ,k) (apply-handler val k))
-    ((diff1-cont ? ? ,k) (apply-handler val k))
-    ((diff2-cont ? ,k) (apply-handler val k))
-    ((div1-cont ? ? ,k) (apply-handler val k))
-    ((div2-cont ? ,k) (apply-handler val k))
-    ((rator-cont ? ? ,k) (apply-handler val k))
-    ((rand-cont ? ? ,k) (apply-handler val k))
-    ((raise1-cont ,k) (apply-handler val k))
-    (? (error 'apply-handler "invalid continuation" cont))))
+  (letrec
+    ((unwind
+      (lambda (k)
+        (pmatch k
+          ((try-cont ,var ,hexp ,senv ?)
+           (value-of/k hexp (extend-env var val senv) cont))
+          ((end-cont ?) (report-uncaught-exception))
+          ((zero1-cont ,k) (unwind k))
+          ((if-test-cont ? ? ? ,k) (unwind k))
+          ((let-exp-cont ? ? ? ,k) (unwind k))
+          ((diff1-cont ? ? ,k) (unwind k))
+          ((diff2-cont ? ,k) (unwind k))
+          ((div1-cont ? ? ,k) (unwind k))
+          ((div2-cont ? ,k) (unwind k))
+          ((rator-cont ? ? ,k) (unwind k))
+          ((rand-cont ? ? ,k) (unwind k))
+          ((raise1-cont ,k) (unwind k))
+          (? (error 'apply-handler "invalid continuation" k))))))
+
+    ;(display "apply-handler: ")
+    ;(display cont)
+    ;(newline)
+    (unwind cont)))
 
 ;; report-uncaught-exception : () -> [Bottom]
 (define (report-uncaught-exception)
@@ -247,6 +255,10 @@
   (test 2 (eval-to-num
            '(try (try (raise 6) catch (x) (raise (- x 1)))
                  catch (y) (- y 3))))
+  (test 1 (eval-to-num
+           '(try (- (raise 4)  ; thank you, Thelonious Monk
+                    2)
+              catch (x) (- x 1))))
 
   (test 2 (eval-to-num '(/ 8 4)))
   (test 3 (eval-to-num '(try (/ 8 0) catch (junk) 3)))
