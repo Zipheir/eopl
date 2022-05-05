@@ -8,7 +8,7 @@ raise was called.  The major change is to apply-handler:
     ((unwind
       (lambda (k)
         (cases continuation k
-          (try-cont (var handler-exp saved-env)
+          (try-cont (var handler-exp saved-env k-junk)
             (value-of/k handler-exp
                         (extend var val saved-env)
                         cont))
@@ -17,8 +17,38 @@ raise was called.  The major change is to apply-handler:
 
     (unwind cont)))
 
-The try-cont structure no longer needs to save the continuation
-of the try expression, since this is provided by the raise
-continuation.
+(Although apply-handler doesn't need access to the continuation
+stored in a try-cont, it's still needed--it's the rest of the
+continuation stack, after all.  A stack representation makes this
+clearer.)
 
 See the letrec-exn-alt branch for an implementation.
+
+Unfortunately, trying to propagate an exception in this implementation
+causes an infinite loop.  Consider:
+
+try (try raise 6
+      catch (x) raise (- x 1))   ; handler A
+  catch (y) (- y 1)   ; handler B
+
+This goes off the rails.  Why?  Here's the continuation for the inner
+raise expression, which is the continuation in which handler A is
+invoked:
+
+(try-cont x (raise-exp ...) <env>
+  (try-cont y (diff-exp ...) <env>
+    (end-cont)))
+
+So handler A is invoked, which raises (- 6 1).  But apply-cont finds
+the same continuation for *this* raise, so handler A is invoked again,
+etc..  The exception never propagates to handler B.
+
+It's not immediately clear how to fix this without major changes, e.g.
+the two continuation strategy of Ex. 5.36.  In that implementation,
+we'd invoke the handler in the (normal) continuation of the raise,
+but with the *rest* of the error continuation (i.e. without the most
+recently installed handler).  Exception propagation works fine, then.
+
+I'm not sure if Friedman & Wand intended propagation to work in this
+version, but I think the above is the best way to do it.  As it stands,
+it's a bug in the current implementation.
