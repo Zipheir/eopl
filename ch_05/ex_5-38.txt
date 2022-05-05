@@ -1,0 +1,4 @@
+# Exercise 5.38
+
+This is a lot like the previous exercise.  See src/letrec-exn.scm
+for an implementation.

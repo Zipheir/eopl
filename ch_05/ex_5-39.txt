@@ -1,0 +1,24 @@
+# Exercise 5.39
+
+When a handler returns, we now continue from the point at which
+raise was called.  The major change is to apply-handler:
+
+(define (apply-handler val cont)
+  (letrec
+    ((unwind
+      (lambda (k)
+        (cases continuation k
+          (try-cont (var handler-exp saved-env)
+            (value-of/k handler-exp
+                        (extend var val saved-env)
+                        cont))
+          (end-cont () (report-uncaught-exception))
+          ...))))
+
+    (unwind cont)))
+
+The try-cont structure no longer needs to save the continuation
+of the try expression, since this is provided by the raise
+continuation.
+
+See the letrec-exn-alt branch for an implementation.
