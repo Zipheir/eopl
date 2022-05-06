@@ -1,0 +1,134 @@
+# Exercise 5.36
+
+This exercise modifies the exceptions interpreter to have fast
+access to the handler continuation by always keeping around two
+continuations.
+
+This is rather knotty; to get it right, I think it's important to
+figure out first how to correctly handle exceptions, then make the
+rest of the interpreter fit that.  So let's start with apply-handler.
+Since the "failure continuation" is passed directly, there's no
+longer any need for recursion:
+
+(define (apply-handler val cont)
+  (cases continuation cont
+    (try-cont (var hexp senv scont)
+      (value-of/k hexp
+                  (extend-env var val senv)
+                  scont
+                  ???)))
+    (end-cont () (report-uncaught-exception))
+    (else (error 'apply-handler
+                 "invalid failure continuation"
+                 cont))))
+
+The ??? term in the call to value-of/k (which, I know, now takes
+two continuations) is what I have to figure out.  This is the
+failure continuation; if the handler raises another exception, this
+is the continuation that will be passed next to apply-handler.
+The handler can call two different continuations; the success
+continuation (scont, here), or another failure continuation (i.e.
+the other handlers).  I think it's clear that this means that
+try-cont has to embed two continuations.  It's a bit easier to think
+of the continuations as two stacks, where the failure stack is made
+up entirely of try-conts:
+
+;; failure stack
+((try-cont v1 h1 v1 k1) (try-cont v2 h2 v2 k2) ...)
+
+(I'll adopt this stack representation.)  Each ki is the success
+continuation of that particular 'try', so, if the handler hi returns,
+it calls ki.  Propagating the exception corresponds to passing
+apply-handler the rest of the failure stack.
+
+So here's the refined version of apply-handler:
+
+(define (apply-handler val conts)
+  (if (null? conts)  ; end-cont?
+      (report-uncaught-exception)
+      (cases continuation (car conts)
+        (try-cont (var hexp senv scont)
+          (value-of/k hexp
+                      (extend-env var val senv)
+                      scont
+                      (cdr conts)))
+        (else (error ...)))))
+
+That's apply-handler.  Let's look at value-of/k:
+
+;; value-of/k : Exp x Env x Cont x Cont -> Final-answer
+(define (value-of/k exp env success failure)
+  (cases expression exp
+    (const-exp num (apply-cont success (num-val num) failure))
+    (zero?-exp exp1
+      (value-of/k exp1
+                  env
+                  (cons (zero1-cont) success)
+                  failure))
+    ; ...
+    (try-exp (exp1 var handler-exp)
+      (value-of/k exp1
+                  env
+                  success
+                  (cons (try-cont var handler-exp env success)
+                  	failure)))
+    ; ...
+    ))
+
+Note that evaluating a try-exp is normally just a matter of passing
+the value of exp1 to the success continuation, but it has the
+side-effect of adding a continuation to the failure stack.
+
+This gives some idea of how things work, but it doesn't explain
+how raise expressions are handled.  Let's consider first a
+simplified 'raise' without a subexpression; evaluating this
+expression just changes the control to the failure stack:
+
+(raise-exp
+  (apply-handler dummy-value failure))
+
+That sums up the important part.  The success continuation
+stack doesn't have to be saved, since, if a handler returns,
+it does so to the continuation saved in the corresponding
+try-cont frame.
+
+Raising the value of an expression is a little more complicated,
+since the value has to be passed to the failure continuation.
+
+(raise-exp (exp1)
+  (value-of/k exp1 env ? ?))
+
+What are the continuations here?  Clearly value-of/k is going to
+call the success continuation on the value of exp1, so the success
+argument should extend the failure stack:
+
+(raise-exp (exp1)
+  (value-of/k exp1 env (cons (raise1-cont) failure) ?))
+
+The failure value at ? is probably irrelevant, but I want to take
+a look at apply-cont before making any assumptions.  I'll be using
+matching, since that handles the stack representation better.
+
+(define (apply-cont cont val failure)
+  (pmatch cont
+    ; ...
+    (((try-cont _ _ _ _) . ,rest)  ; unneeded!
+     (apply-cont rest val))
+    ((raise1-cont . ,fail-rest)
+     (apply-handler fail-rest val))
+    ; ...
+    ))
+
+apply-cont must thread the 'failure' continuation through, even
+though none of the clauses need it.  (apply-procedure/k needs the
+same change.)
+
+The clause for try-cont is an eye-opener, but we really don't even
+need it, I think; apply-cont should never see any try-conts, since
+they're only added to the failure stack, which is processed by
+apply-handler.  The body of this clause can then be safely replaced
+with a "can't happen" error.
+
+That's the whole thing.  It's a bit of a mess; *most* of the
+interpreter has to be rewritten, since the mostly-useless 'failure'
+continuation spills out everywhere.
