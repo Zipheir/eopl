@@ -1,0 +1,25 @@
+# Exercise 5.44
+
+Add call/cc, and translate all letcc expressions into equivalent
+call/cc uses.
+
+This is pretty easy, although the book is a little misleading when
+it calls call/cc a procedure.  I can't define call/cc as a procedure
+in the language without some other form exposing the current
+continuation.  So call/cc is a "primitive procedure", bound in the
+initial environment to call-with-current-continuation.  This means
+adding some boring infrastructure for applying primitives.
+
+The translator is also very easy, though there's a ton of
+boilerplate.  Here's the interesting part:
+
+(define (translate exp)
+  (pmatch exp
+    ((letcc-exp ,var ,body)
+     `(call-exp (var-exp call-with-current-continuation)
+                (proc-exp ,var ,(translate body))))
+    ;; ...
+    ))
+
+See the letrec-exn-call/cc branch for the rest of the hairy
+details.
