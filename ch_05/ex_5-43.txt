@@ -1,0 +1,26 @@
+# Exercise 5.43
+
+Now we want to unify continuation and procedure values in the language.
+This doesn't necessarily mean that continuations will be represented by
+procedure or vice-versa.  With the procedure representation of current
+interpreters, they'll have to be distinct: procedures don't encapsulate
+a continuation, and continuations don't have bodies or bound variables.
+To keep the value representation sane, I'll still have distinct proc-val
+and cont-val constructors.
+
+The changes are straightforward.  Only the rand-cont clause of
+apply-cont changes:
+
+(rand-cont (vrat env cont)
+  (cond ((proc-val? vrat)
+         (apply-procedure/k (expval->proc vrat) val cont))
+        ((cont-val? vrat)
+         (apply-cont (expval->cont vrat) val))
+        (else (error ...))))
+
+You might complain that procedure and continuation values are still
+distinct, but that seems preferable to subtyping proc-vals.
+
+More generally, you might not want to unify continuations and
+procedures due to their different effects on control.  Continuations
+also don't have a simple type.
