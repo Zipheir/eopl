@@ -10,6 +10,10 @@
 
 ;;;; Expressed values
 
+;; Close enough for jazz.
+(define (exp-val? x)
+  (and (pair? x) (symbol? (car x))))
+
 ;; expval->num : Exp-val -> Int
 (define (expval->num val)
   (pmatch val
@@ -49,6 +53,23 @@
   (pmatch proc1
     ((proc ,var ,body ,env)
      (value-of/k body (extend-env var val env) cont))))
+
+;;;; Primitives
+
+;; prim-call/cc : Proc-val x Cont -> Final-answer
+(define (prim-call/cc vproc cont)
+  (apply-procedure/k (expval->proc vproc) `(cont-val ,cont) cont))
+
+;; apply-proc-or-prim/k : (Exp-val + Scheme-Procedure) x Exp-val x
+;;   Cont -> Final-answer
+(define (apply-proc-or-prim/k x argval cont)
+  (cond ((exp-val? x)
+         (apply-procedure/k (expval->proc x) argval cont))
+        ((procedure? x)
+         (x argval cont))
+        (else (error 'apply-proc-or-prim/k
+                     "invalid applicable thingy"
+                     x))))
 
 ;;;; Environments
 
@@ -92,7 +113,8 @@
 (define (init-env)
   (alist->env `((i . (num-val 1))
                 (v . (num-val 5))
-                (x . (num-val 10)))))
+                (x . (num-val 10))
+                (call-with-current-continuation . ,prim-call/cc))))
 
 ;;;; Exception handling
 
@@ -166,7 +188,7 @@
     ((rator-cont ,rand ,env ,k)
      (value-of/k rand env `(rand-cont ,val ,env ,k)))
     ((rand-cont ,vrat ,env ,k)
-     (apply-procedure/k (expval->proc vrat) val k))
+     (apply-proc-or-prim/k vrat val k))
     ((try-cont ? ? ? ,k) (apply-cont k val))
     ((raise1-cont ,k) (apply-handler val k))
     ((throw-rator-cont ,exp1 ,env)
@@ -212,9 +234,35 @@
      (value-of/k exp1 env `(raise1-cont ,cont)))
     ((throw-exp ,cont1 ,exp1)
      (value-of/k cont1 env `(throw-rator-cont ,exp1 ,env)))
-    ((letcc-exp ,var ,body)
-     (value-of/k body (extend-env var `(cont-val ,cont) env) cont))
     (? (error 'value-of/k "invalid expression" exp))))
+
+;; Translator to call/cc-based language.
+;; translate : Exp -> Exp-ccc
+(define (translate exp)
+  (pmatch exp
+    ((letcc-exp ,var ,body)
+     `(call-exp (var-exp call-with-current-continuation)
+                (proc-exp ,var ,(translate body))))
+    ;; The rest is boilerplate.
+    ((proc-exp ,var ,body)
+     `(proc-exp ,var ,(translate body)))
+    ((zero?-exp ,exp1) `(zero?-exp ,(translate exp1)))
+    ((diff-exp ,exp1 ,exp2)
+     `(diff-exp ,(translate exp1) ,(translate exp2)))
+    ((div-exp ,exp1 ,exp2)
+     `(div-exp ,(translate exp1) ,(translate exp2)))
+    ((if-exp ,exp1 ,exp2 ,exp3)
+     `(if-exp ,(translate exp1) ,(translate exp2) ,(translate exp3)))
+    ((let-exp ,var ,exp1 ,body)
+     `(let-exp ,var ,(translate exp1) ,(translate body)))
+    ((call-exp ,rator ,rand)
+     `(call-exp ,(translate rator) ,(translate rand)))
+    ((try-exp ,exp1 ,vars ,hexp)
+     `(try-exp ,(translate exp1) ,vars ,(translate hexp)))
+    ((raise-exp ,exp1) `(raise-exp ,(translate exp1)))
+    ((throw-exp ,cont1 ,exp1)
+     `(throw-exp ,(translate cont1) ,(translate exp1)))
+    (? exp)))  ; var-exps and const-exps
 
 ;; Parser for a simple S-exp representation.
 ;; parse : List -> Exp
@@ -244,12 +292,12 @@
     (? (error 'parse "invalid syntax" sexp))))
 
 ;; parse-program : List -> Program
-(define (parse-program sexp)
-  (list 'program (parse sexp)))
+(define (parse-and-translate-program sexp)
+  (list 'program (translate (parse sexp))))
 
 ;; run : List x Bool -> Final-answer
 (define (run sexp print-msg)
-  (value-of-program (parse-program sexp) print-msg))
+  (value-of-program (parse-and-translate-program sexp) print-msg))
 
 ;;;; Tests
 
@@ -284,6 +332,17 @@
            '(try (- (raise 4)  ; thank you, Thelonious Monk
                     3)
               catch (x res) (throw res (- x (- 0 4))))))
+
+  ;;; Basic translator sanity check
+  
+  (test #t (let ((exp
+                  (parse
+                   '(let add1 = (proc (a) (- a (- 0 1))) in (add1 v)))))
+             (equal? exp (translate exp))))
+  (test #t (let ((exp
+                  (parse
+                   '(try (/ 8 0) catch (x res) (raise x)))))
+             (equal? exp (translate exp))))
 
   ;;; letcc
 
