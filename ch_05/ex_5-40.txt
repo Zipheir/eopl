@@ -1,0 +1,77 @@
+# Exercise 5.40
+
+We want to give exception handlors the ability to either return
+(give a value for the enclosing try expression) or resume (continue
+from where the exception was raised).  You don't necessarily need
+first-class continuations (as in Scheme) to do this.  Among other
+things, you could add a special syntax for handlers with keywords
+'resume' and 'return'.  But such keywords have no meaning outside
+of handlers.  Overall, I think that "continuations are values"
+is the natural solution.
+
+The next question is then, what kind of values?  An easy option is
+to make them procedure-like objects which are applied with a special
+form, say 'throw' (using the name preferred by a later exercise).
+Let's try to do this.
+
+The syntax is easy enough.  A try expression now looks like this:
+
+try Expression catch (Identifier Identifier) Expression
+
+where the additional name is bound to the resume continuation.
+
+apply-handler now constructs a continuation value and binds it to
+the given name.  I also need to include the change from ex. 5.39
+which saves the original continuation parameter:
+
+(define (apply-handler val k-resume)
+  (letrec
+    ((unwind
+      (lambda (cont)
+        (pmatch resume-cont
+          ((try-cont (,v ,res) ,hexp ,senv ,k-return)
+           (value-of/k hexp
+                       (extend-env v val
+                        (extend-env res `(cont-val ,k-resume)
+                         senv))
+                       k-return))
+          ; ...
+          ))))
+
+  (unwind k-resume)))
+
+This gives the semantics of try: the handler is evaluated in an
+environment in which a name (say, *resume*) is bound to the
+continuation that was in effect when the exception was raised.
+If the handler returns normally, then the result is the value of
+the try expression.  If it instead invokes the *resume* continuation
+using a 'throw', then the given value is "inserted in place of the
+raise expression".
+
+The 'throw' expression will have the following syntax:
+
+throw Expression Expression
+[throw-exp (cont exp1)]
+
+While the book likes 'throw foo to K', I like the more familiar
+applicative syntax.
+
+The *cont* subexpression must evaluate to a continuation value.
+
+value-of/k:
+
+`((throw-exp ,cont1 ,exp1)
+  (value-of/k cont1
+              env
+              `(throw-rator-cont ,exp1 ,env)))
+
+apply-cont:
+
+((throw-rator-cont ,exp1 ,env)
+ (value-of/k exp1 env `(throw-rand-cont ,val)))
+((throw-rand-cont ,kval)
+ (let ((k (expval->cont kval)))
+   (apply-cont k val)))
+
+So this is actually pretty simple.  Note that the continuation of
+the 'throw' form is discarded.
