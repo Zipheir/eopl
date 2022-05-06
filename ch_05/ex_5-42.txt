@@ -1,0 +1,16 @@
+# Exercise 5.42
+
+This adds letcc to the exceptions interpreter.  The syntax:
+
+Expression ::= letcc Identifier in Expression
+
+The spec.:
+
+(value-of/k (letcc-exp var body) env cont))
+  = (value-of/k body (extend-env var (cont-val cont) env) cont)
+
+Once a continuation has been bound to a variable with letcc, it
+can be applied with a throw expression (see Ex. 5.40).
+
+This is very straightforward to add; the above change to value-of/k
+is pretty much all we need.

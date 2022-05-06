@@ -1,5 +1,6 @@
 ;;;; CPS LETREC interpreter from Ch. 5, with exceptions (S 5.4),
-;;;; extended with resume/return options for handles (ex. 5.40).
+;;;; extended with resume/return options for handles (ex. 5.40),
+;;;; and letcc (ex. 5.42).
 
 (import (rnrs base (6))
         (rnrs lists (6)))
@@ -211,6 +212,8 @@
      (value-of/k exp1 env `(raise1-cont ,cont)))
     ((throw-exp ,cont1 ,exp1)
      (value-of/k cont1 env `(throw-rator-cont ,exp1 ,env)))
+    ((letcc-exp ,var ,body)
+     (value-of/k body (extend-env var `(cont-val ,cont) env) cont))
     (? (error 'value-of/k "invalid expression" exp))))
 
 ;; Parser for a simple S-exp representation.
@@ -235,6 +238,8 @@
      `(try-exp ,(parse e) ,vs ,(parse h)))
     ((raise ,e) `(raise-exp ,(parse e)))
     ((throw ,ek ,ev) `(throw-exp ,(parse ek) ,(parse ev)))
+    ((letcc ,v in ,e) (guard (symbol? v))
+     `(letcc-exp ,v ,(parse e)))
     ((,e1 ,e2) `(call-exp ,(parse e1) ,(parse e2)))
     (? (error 'parse "invalid syntax" sexp))))
 
@@ -279,4 +284,9 @@
            '(try (- (raise 4)  ; thank you, Thelonious Monk
                     3)
               catch (x res) (throw res (- x (- 0 4))))))
+
+  ;;; letcc
+
+  (test 5 (eval-to-num '(letcc k in 5)))
+  (test 4 (eval-to-num '(letcc k in (- 5 (throw k 4)))))
   )
