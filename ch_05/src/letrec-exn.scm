@@ -1,4 +1,5 @@
-;;;; CPS LETREC interpreter from Ch. 5, with exception (S 5.4).
+;;;; CPS LETREC interpreter from Ch. 5, with exceptions (S 5.4),
+;;;; extended with resume/return options for handles (ex. 5.40).
 
 (import (rnrs base (6))
         (rnrs lists (6)))
@@ -25,6 +26,12 @@
   (pmatch val
     ((proc-val ,p) p)
     (? (report-expval-extractor-error 'proc val))))
+
+;; expval->cont : Exp-val -> Cont
+(define (expval->cont val)
+  (pmatch val
+    ((cont-val ,k) k)
+    (? (report-expval-extractor-error 'cont val))))
 
 (define (report-expval-extractor-error variant value)
   (error 'expval-extractors
@@ -96,22 +103,30 @@
 ;; This would be more compact if continuations used the stack
 ;; representation of Ex. 5.15.  As it is, every continuation
 ;; variety has to be considered.
-(define (apply-handler val cont)
-  (pmatch cont
-    ((try-cont ,var ,hexp ,senv ,k)
-     (value-of/k hexp (extend-env var val senv) k))
-    ((end-cont ?) (report-uncaught-exception))
-    ((zero1-cont ,k) (apply-handler val k))
-    ((if-test-cont ? ? ? ,k) (apply-handler val k))
-    ((let-exp-cont ? ? ? ,k) (apply-handler val k))
-    ((diff1-cont ? ? ,k) (apply-handler val k))
-    ((diff2-cont ? ,k) (apply-handler val k))
-    ((div1-cont ? ? ,k) (apply-handler val k))
-    ((div2-cont ? ,k) (apply-handler val k))
-    ((rator-cont ? ? ,k) (apply-handler val k))
-    ((rand-cont ? ? ,k) (apply-handler val k))
-    ((raise1-cont ,k) (apply-handler val k))
-    (? (error 'apply-handler "invalid continuation" cont))))
+(define (apply-handler val k-resume)
+  (letrec
+    ((unwind
+      (lambda (cont1)
+        (pmatch cont1
+          ((try-cont (,var ,res) ,hexp ,senv ,k-return)
+           (value-of/k hexp
+                       (extend-env var val
+                        (extend-env res `(cont-val ,k-resume) senv))
+                       k-return))
+          ((end-cont ?) (report-uncaught-exception))
+          ((zero1-cont ,k) (unwind k))
+          ((if-test-cont ? ? ? ,k) (unwind k))
+          ((let-exp-cont ? ? ? ,k) (unwind k))
+          ((diff1-cont ? ? ,k) (unwind k))
+          ((diff2-cont ? ,k) (unwind k))
+          ((div1-cont ? ? ,k) (unwind k))
+          ((div2-cont ? ,k) (unwind k))
+          ((rator-cont ? ? ,k) (unwind k))
+          ((rand-cont ? ? ,k) (unwind k))
+          ((raise1-cont ,k) (unwind k))
+          (? (error 'apply-handler "invalid continuation" cont1))))))
+
+    (unwind k-resume)))
 
 ;; report-uncaught-exception : () -> [Bottom]
 (define (report-uncaught-exception)
@@ -153,6 +168,11 @@
      (apply-procedure/k (expval->proc vrat) val k))
     ((try-cont ? ? ? ,k) (apply-cont k val))
     ((raise1-cont ,k) (apply-handler val k))
+    ((throw-rator-cont ,exp1 ,env)
+     (value-of/k exp1 env `(throw-rand-cont ,val)))
+    ((throw-rand-cont ,kval)
+     (let ((k (expval->cont kval)))
+       (apply-cont k val)))
     (? (error 'apply-cont "invalid continuation" cont))))
 
 ;;;; Interpreter
@@ -185,10 +205,12 @@
                  cont))
     ((call-exp ,rator ,rand)
      (value-of/k rator env `(rator-cont ,rand ,env ,cont)))
-    ((try-exp ,exp1 ,var ,hexp)
-     (value-of/k exp1 env `(try-cont ,var ,hexp ,env ,cont)))
+    ((try-exp ,exp1 ,vars ,hexp)
+     (value-of/k exp1 env `(try-cont ,vars ,hexp ,env ,cont)))
     ((raise-exp ,exp1)
      (value-of/k exp1 env `(raise1-cont ,cont)))
+    ((throw-exp ,cont1 ,exp1)
+     (value-of/k cont1 env `(throw-rator-cont ,exp1 ,env)))
     (? (error 'value-of/k "invalid expression" exp))))
 
 ;; Parser for a simple S-exp representation.
@@ -208,9 +230,11 @@
     ((letrec ,f (,v) = ,e in ,body)
      (guard (symbol? f) (symbol? v))
      `(letrec-exp ,f ,v ,(parse e) ,(parse body)))
-    ((try ,e catch (,v) ,h) (guard (symbol? v))
-     `(try-exp ,(parse e) ,v ,(parse h)))
+    ((try ,e catch ,vs ,h)
+     (guard (= (length vs) 2) (for-all symbol? vs))
+     `(try-exp ,(parse e) ,vs ,(parse h)))
     ((raise ,e) `(raise-exp ,(parse e)))
+    ((throw ,ek ,ev) `(throw-exp ,(parse ek) ,(parse ev)))
     ((,e1 ,e2) `(call-exp ,(parse e1) ,(parse e2)))
     (? (error 'parse "invalid syntax" sexp))))
 
@@ -241,13 +265,18 @@
               (letrec f (a) = (if (zero? a) 0 (add1 (f (- a 1))))
                in (f 5)))))
 
-  (test 5 (eval-to-num '(try 5 catch (x) 2)))
-  (test 2 (eval-to-num '(try (raise 10) catch (x) 2)))
-  (test 10 (eval-to-num '(try (raise 10) catch (x) x)))
+  (test 5 (eval-to-num '(try 5 catch (x _) 2)))
+  (test 2 (eval-to-num '(try (raise 10) catch (x _) 2)))
+  (test 10 (eval-to-num '(try (raise 10) catch (x _) x)))
   (test 2 (eval-to-num
-           '(try (try (raise 6) catch (x) (raise (- x 1)))
-                 catch (y) (- y 3))))
+           '(try (try (raise 6) catch (x _) (raise (- x 1)))
+                 catch (y _) (- y 3))))
 
   (test 2 (eval-to-num '(/ 8 4)))
-  (test 3 (eval-to-num '(try (/ 8 0) catch (junk) 3)))
+  (test 3 (eval-to-num '(try (/ 8 0) catch (junk _) 3)))
+
+  (test 5 (eval-to-num
+           '(try (- (raise 4)  ; thank you, Thelonious Monk
+                    3)
+              catch (x res) (throw res (- x (- 0 4))))))
   )
