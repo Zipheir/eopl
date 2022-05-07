@@ -26,6 +26,12 @@
     ((proc-val ,p) p)
     (? (report-expval-extractor-error 'proc val))))
 
+;; expval->del-cont : Exp-val -> Cont
+(define (expval->del-cont val)
+  (pmatch val
+    ((del-cont-val ,k) k)
+    (? (report-expval-extractor-error 'del-cont val))))
+
 (define (report-expval-extractor-error variant value)
   (error 'expval-extractors
          "unexpected type found"
@@ -112,7 +118,32 @@
      (value-of/k rand env `(rand-cont ,val ,env ,k)))
     ((rand-cont ,vrat ,env ,k)
      (apply-procedure/k (expval->proc vrat) val k))
+    ((reset-cont ,k) (apply-cont k val))
+    ((throw-rator-cont ,exp2 ,env ,k)
+     (value-of/k exp2 env `(throw-rand-cont ,val ,k)))
+    ((throw-rand-cont ,vrat ?)
+     (apply-cont (expval->del-cont vrat) val))
     (? (error 'apply-cont "invalid continuation" cont))))
+
+;;;; Delimited continuations
+
+;; get-reset : Cont -> Cont
+;;
+;; Search through cont and return the most recent reset continuation.
+(define (get-reset cont)
+  (pmatch cont
+    ((end-cont ?) (error 'get-reset "no reset found" cont))
+    ((reset-cont ,k) k)
+    ((zero1-cont ,k) (get-reset k))
+    ((if-test-cont ? ? ? ,k) (get-reset k))
+    ((let-exp-cont ? ? ? ,k) (get-reset k))
+    ((diff1-cont ? ? ,k) (get-reset k))
+    ((diff2-cont ? ? ,k) (get-reset k))
+    ((rator-cont ? ? ,k) (get-reset k))
+    ((rand-cont ? ? ,k) (get-reset k))
+    ((throw-rator-cont ? ? ,k) (get-reset k))
+    ((throw-rand-cont ? ? ,k) (get-reset k))
+    (? (error 'get-reset "invalid continuation" cont))))
 
 ;;;; Interpreter
 
@@ -140,6 +171,13 @@
      (value-of/k lr-body
                  (extend-env-rec p-name b-var p-body env)
                  cont))
+    ((reset-exp ,body) (value-of/k body env `(reset-cont ,cont)))
+    ((shift-exp ,var ,exp1)
+     (value-of/k exp1
+                 (extend-env var `(del-cont-val ,(get-reset cont)) env)
+                 cont))
+    ((throw-exp ,exp1 ,exp2)
+     (value-of/k exp1 env `(throw-rator-cont ,exp2 ,env ,cont)))
     ((call-exp ,rator ,rand)
      (value-of/k rator env `(rator-cont ,rand ,env ,cont)))
     (? (error 'value-of/k "invalid expression" exp))))
@@ -160,6 +198,10 @@
     ((letrec ,f (,v) = ,e in ,body)
      (guard (symbol? f) (symbol? v))
      `(letrec-exp ,f ,v ,(parse e) ,(parse body)))
+    ((reset ,e) `(reset-exp ,(parse e)))
+    ((shift ,v in ,e) (guard (symbol? v))
+     `(shift-exp ,v ,(parse e)))
+    ((throw ,ek ,ev) `(throw-exp ,(parse ek) ,(parse ev)))
     ((,e1 ,e2) `(call-exp ,(parse e1) ,(parse e2)))
     (? (error 'parse "invalid syntax" sexp))))
 
@@ -189,4 +231,9 @@
            '(let add1 = (proc (b) (- b (- 0 1))) in
               (letrec f (a) = (if (zero? a) 0 (add1 (f (- a 1))))
                in (f 5)))))
+
+  (test 6 (eval-to-num '(reset (- 10 4))))
+  (test 9 (eval-to-num '(- 10 (reset (- 7 (shift k in (throw k 1)))))))
+  (test 2 (eval-to-num
+           '(reset (- 10 (shift k in (throw k (throw k 2)))))))
   )
