@@ -14,11 +14,12 @@ Expression ::= reset Expression
            ::= shift Identifier in Expression
                [shift-exp (var body)]
 
-A 'reset' form delimits a continuation, and 'shift' *k* *exp*
-evaluates *exp* with *k* bound to the continuation from the most
-recent reset point.  Of course, this means I'll have to add a type of
-continuation values; I'll also use the 'throw' form of Ex. 5.40 to
-apply continuations.
+A 'reset' form delimits a continuation; 'shift' *k* *exp* takes
+the continuation back to the most recent delimiter, binds it to *k*,
+then evaluates *exp* with the continuation given by the reset.
+
+Of course, this means I'll have to add a type of continuation values;
+I'll also use the 'throw' form of Ex. 5.40 to apply continuations.
 
 Here are the value-of/k clauses:
 
@@ -28,9 +29,8 @@ Here are the value-of/k clauses:
 ((reset-exp ,body) (value-of/k body env (reset-cont cont)))
 
 ((shift-exp ,var ,body)
- (value-of/k body
-             (extend-env var (cont-val (get-reset cont)) env)
-             cont)))
+ (let ((dc (get-reset cont)))
+   (value-of/k body (extend-env var (cont-val dc) env) dc)))
 
 The get-reset procedure digs through a continuation to the last reset
 point and returns its continuation:
@@ -46,6 +46,5 @@ point and returns its continuation:
 
 With this, throw, and parser support, I can write expressions like
 
--(10, reset -(7, shift k in throw(k, 1))) => 9
-
-reset -(10, shift k in throw(k, throw(k, 2))) => 2
+reset -(10, shift _ in 4)                     => 4
+reset -(10, shift k in (throw k (throw k 3))) => 3
