@@ -1,0 +1,51 @@
+# Adding Delimited Continuations
+
+Instead of (or in addition to) the undelimited continuations that we
+get from letcc, I can implement delimited continuations for the CPS
+LETREC interpreter.  This is surprisingly easy.  I'll document how
+to implement the shift/reset delimited continuation primitives; I may
+implement continuation prompts later.
+
+Here's the syntax::
+
+Expression ::= reset Expression
+               [reset-exp (body)]
+
+           ::= shift Identifier in Expression
+               [shift-exp (var body)]
+
+A 'reset' form delimits a continuation, and 'shift' *k* *exp*
+evaluates *exp* with *k* bound to the continuation from the most
+recent reset point.  Of course, this means I'll have to add a type of
+continuation values; I'll also use the 'throw' form of Ex. 5.40 to
+apply continuations.
+
+Here are the value-of/k clauses:
+
+;; (define (value-of/k exp env cont)
+;;   (pmatch exp ...
+;;
+((reset-exp ,body) (value-of/k body env (reset-cont cont)))
+
+((shift-exp ,var ,body)
+ (value-of/k body
+             (extend-env var (cont-val (get-reset cont)) env)
+             cont)))
+
+The get-reset procedure digs through a continuation to the last reset
+point and returns its continuation:
+
+;; get-reset : Cont -> Cont
+(define (get-reset cont)
+  (pmatch cont
+    ((end-cont) (error 'get-reset "no reset found" cont))
+    ((reset-cont ,k) k)
+    ((zero1-cont ,k) (get-reset k))
+    ;; ... all other cases are just like the zero1-cont one.
+    ))
+
+With this, throw, and parser support, I can write expressions like
+
+-(10, reset -(7, shift k in throw(k, 1))) => 9
+
+reset -(10, shift k in throw(k, throw(k, 2))) => 2
