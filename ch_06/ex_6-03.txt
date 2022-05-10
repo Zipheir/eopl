@@ -1,0 +1,58 @@
+# Exercise 6.3
+
+Convert to CPS.  Everything unknown is assumed to be in CPS
+already.
+
+## 1
+
+(lambda (x y) (p (+ 8 x) (q y)))
+
+CPS:
+
+(lambda (x y cont)
+  (+/k 8
+       x
+       (lambda (val1)
+         (q/k y
+	      (lambda (val2)
+	        (p val1 val2 cont))))))
+
+## 2
+
+(lambda (x y u v)
+  (+ 1 (f (g x y) (+ u v))))
+
+CPS:
+
+(lambda (x y u v cont)
+  (g/k x
+       y
+       (lambda (gval)
+         (+/k u
+	      v
+	      (lambda (uv-sum)
+	        (f/k gval
+		     uv-sum
+		     (lambda (fval)
+		       (+/k 1 fval cont))))))))
+
+## 3
+
+(+ 1 (f (g x y) (+ u (h v))))
+
+CPS (assume 'cont' is the current continuation):
+
+(g/k x
+     y
+     (lambda (gval)
+       (h/k v
+            (lambda (hval)
+	      (+/k u
+	           hval
+		   (lambda (foo-val)
+		     (f/k gval
+		          foo-val
+			  (lambda (bar-val)
+			    (+/k 1 bar-val cont)))))))))
+
+That's enough for me at the moment.
