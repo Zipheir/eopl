@@ -1,0 +1,87 @@
+# Chapter 6
+
+This chapter works toward a process for transforming programs
+into CPS.  This will mainly use a procedural representation for
+continuations.  Here's the CPS version of a factorial program:
+
+(define (fact n)
+  (fact/k n (end-cont)))
+
+(define (fact/k n cont)
+  (if (zero? n)
+      (apply-cont 1)
+      (fact/k (- n 1) (fact-cont n cont))))
+
+The continuations:
+
+(define (end-cont)
+  (lambda (val)
+    val))
+
+(define (fact-cont n cont)
+  (lambda (val)
+    (apply-cont cont (* n val))))
+
+Here, apply-cont is just application, so it can be elided.
+This, along with inlining the definitions, gives a compact
+version:
+
+(define (fact n)
+  (fact/k n (lambda (v) v)))
+
+(define (fact/k n cont)
+  (if (zero? n)
+      (cont 1)
+      (fact/k (- n 1)
+              (lambda (val)
+                (cont (* n val))))))
+
+A similar transformation on a Fibonacci function:
+
+(define (fib n)
+  (if (< n 2)
+      1
+      (+ (fib (- n 1))
+         (fib (- n 2)))))
+
+CPSed, with everything inlined:
+
+(define (fib n)
+  (fib/k n (lambda (v) v)))
+
+(define (fib/k n cont)
+  (if (< n 2)
+      (cont 1)
+      (fib/k (- n 1)
+             (lambda (val1)
+               (fib/k (- n 2)
+                      (lambda (val2)
+                        (cont (+ val1 val2))))))))
+
+Note how inlining does reduce the complexity of the continuations,
+since nested scope means some things don't have to be passed as
+arguments.
+
+An interesting observation on the fact/k program is that each
+continuation just multiplies the value passed to it, i.e. they're
+all of the form (lambda (val) (* k val)).  So they can be represented
+by just the number k:
+
+(define (end-cont) 1)
+
+(define (fact-cont n k) (* n k))
+
+(define (apply-cont cont val) (* cont val))
+
+Inlined, we have something very similar to fact-iter:
+
+(define (fact n)
+  (fact/k n 1))
+
+(define (fact/k n k)
+  (if (zero? n)
+      k
+      (fact/k (- n 1) (* n k))))
+
+There's an interesting observation here: An accumulator is an
+optimized representation of a continuation!
