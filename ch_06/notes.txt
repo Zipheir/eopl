@@ -122,3 +122,42 @@ in operand position are the ones that extend the control context,
 while the ones in tail position are evaluated in the original
 continuation.  From this, the CPS-OUT target language can be
 defined.
+
+This language has two nonterminals, Simple-exp and Tf-exp.
+The expressions in Simple-exp are free of procedure calls, and
+those in Tf-exp are guaranteed to be in tail form.
+
+Here's the grammar (p. 208):
+
+Program ::= Tf-exp
+            [a-program (exp1)]
+
+Simple-exp ::= Number
+               [const-exp (num)]
+
+           ::= Identifier
+	       [var-exp (var)]
+
+           ::= -(Simple-exp, Simple-exp)
+	       [cps-diff-exp (simple1 simple2)]
+
+           ::= zero?(Simple-exp)
+	       [cps-zero?-exp (simple1)]
+
+           ::= proc ({Identifier}*) Tf-exp
+	       [cps-proc-exp (vars body)]
+
+Tf-exp ::= Simple-exp
+           [simple-exp->exp (simple1)]
+
+       ::= let Identifier = Simple-exp in Tf-exp
+           [cps-let-exp (var simple1 body)]
+
+       ::= letrec {Identifier ({Identifier}*) = Tf-exp}* in Tf-exp
+           [cps-letrec-exp (p-names b-varss p-bodies body)]
+
+       ::= if Simple-exp then Tf-exp else Tf-exp
+           [cps-if-exp (simple1 body1 body2)]
+
+       ::= (Simple-exp {Simple-exp}*)
+           [cps-call-exp (rator rands)]
