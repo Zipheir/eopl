@@ -85,3 +85,40 @@ Inlined, we have something very similar to fact-iter:
 
 There's an interesting observation here: An accumulator is an
 optimized representation of a continuation!
+
+## 6.2 Tail form
+
+The input language for the CPS translation will be LETREC with
+multi-argument procedures and letrec bindings.  This language
+will be called CPS-IN, and expressions in it will be called
+*input expressions* for clarity.
+
+The first step is to find a subset of CPS-IN expressions which
+don't accumulate control context.  (i.e. "tail position" has to
+be defined for the language.)
+
+An expression is in *tail form* if every procedure call, and
+every expression containing a procedure call, is in tail position.
+(They give the example of (if (zero? x) (f y) (g z)), which makes
+no sense--obviously (zero? x) is not in tail position.  Otherwise,
+this seems clear.)
+
+Figuring out what tail positions are requires knowing the
+meaning of the language.  Here are the tail positions (marked
+with T, non-tail positions are marked O for "operand") for the
+language CPS-IN:
+
+zero?(O)
+-(O, O)
+if O then T else T
+let Var = O in T
+letrec {Var (Var *) = T}* in T
+proc (Var *) T
+(O O ... O)
+
+In each case, the value of a tail-position subexpression
+could become the value of the entire expression.  Subexpressions
+in operand position are the ones that extend the control context,
+while the ones in tail position are evaluated in the original
+continuation.  From this, the CPS-OUT target language can be
+defined.
