@@ -1,0 +1,59 @@
+# Exercise 6.10
+
+Here's the classic recursive version of list-sum:
+
+(define (list-sum ns)
+  (if (null? ns)
+      0
+      (+ (car n) (list-sum (cdr ns)))))
+
+Converting this to CPS gives:
+
+(define (list-sum ns)
+  (list-sum/k ns (end-cont)))
+
+(define (list-sum/k ns cont)
+  (if (null? ns)
+      (apply-cont cont 0)
+      (list-sum/k (cdr ns) (list-sum-cont (car ns) cont))))
+
+(define (end-cont) identity)
+
+(define (list-sum-cont n cont)
+  (lambda (val)
+    (apply-cont cont (+ n val))))
+
+(define (apply-cont cont val)
+  (cont val))
+
+As with the fact/k example, each list-sum-cont continuation just
+adds a number to its val argument: in essence, each continuation is
+(lambda (val) (+ n val)) for some n.  Representing each continuation
+by the variable n gives the following definitions:
+
+;; Cont = Integer
+
+;; end-cont : () -> Cont
+(define (end-cont) 0)
+
+;; list-sum-cont : Int x Cont -> Cont
+(define (list-sum-cont n cont)
+  (+ n cont))
+
+(I've included the types, since this representation change was a
+little unclear in the book's example.)
+
+Inlining these definitions and applying (+ cont 0) = cont to
+simplify the base case gives:
+
+(define (list-sum ns)
+  (list-sum/k ns 0))
+
+(define (list-sum/k ns cont)
+  (if (null? ns)
+      cont
+      (list-sum/k (cdr ns) (+ (car ns) cont))))
+
+which is the familiar "tupled" iterative version of list-sum.  So,
+again, an accumulator is acting like an optimized representation
+of a continuation.
