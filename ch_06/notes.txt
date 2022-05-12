@@ -161,3 +161,62 @@ Tf-exp ::= Simple-exp
 
        ::= (Simple-exp {Simple-exp}*)
            [cps-call-exp (rator rands)]
+
+The goal is to build a translator that takes the monolithic
+Exp type of CPS-IN to a valid Tf-exp in CPS-OUT.
+
+## 6.3 Converting to CPS
+
+This section develops the CPS-IN -> CPS-OUT translation algorithm.
+Both the input and output of this translator will be abstract
+tree representations of these languages.
+
+Like the CPS interpreter, the translator takes a continuation,
+which in this case is a Simple-exp.
+
+Simple translation clauses:
+
+(cps-of-exp (const-exp n) K)
+  = (make-send-to-cont K (cps-const-exp n))
+
+(cps-of-exp (var-exp v) K)
+  = (make-send-to-cont K (cps-var-exp v))
+
+where make-send-to-cont builds a CPS call expression:
+
+;; make-send-to-cont : Simple-exp x Simple-exp -> Tf-exp
+(define (make-send-to-cont k-exp simple)
+  (cps-call-exp k-exp (list simple-exp)))
+
+Procedures are translated by adding a continuation parameter.
+Using concrete syntax,
+
+proc (var1, ..., varn) exp
+
+becomes
+
+(K <<proc (var1, ..., varn k) (cps-of-exp k)>>)
+
+When translating expressions with operands, the translator
+has to handle both simple and non-simple expressions.  The
+simple ones can be evaluated directly, but the others need
+to be evaluated in a continuation that continues the operand
+evaluation.  For example, a variadic sum form (which CPS-IN
+doesn't actually have, but whatever) could have only simple
+operands:
+
+(cps-of-exp <<+(simp1 ..., simpn)>> K)
+  = (K +(simp1, ..., simpn))
+
+In this case, the translation is easy.  Here's one with
+non-simple operands:
+
+(cps-of-exp <<+(simp1, exp2, simp3, ..., simpn)>> K)
+  = (cps-of-exp exp2
+                <<proc (var2)
+                    (K +(simp1, var2, simp3, ..., simpn))>>)
+
+Proceeding recursively, the expression will be "unnested" into
+a series of tail-calls, with a sum expression of simple operands
+at the bottom (with var-exps holding the places of the complex
+operands).
