@@ -133,10 +133,10 @@ Program ::= Tf-exp
             [a-program (exp1)]
 
 Simple-exp ::= Number
-               [const-exp (num)]
+               [cps-const-exp (num)]
 
            ::= Identifier
-	       [var-exp (var)]
+	       [cps-var-exp (var)]
 
            ::= -(Simple-exp, Simple-exp)
 	       [cps-diff-exp (simple1 simple2)]
@@ -146,6 +146,9 @@ Simple-exp ::= Number
 
            ::= proc ({Identifier}*) Tf-exp
 	       [cps-proc-exp (vars body)]
+
+           ::= +({Simple-exp}*)
+               [cps-sum-exp (exps)]
 
 Tf-exp ::= Simple-exp
            [simple-exp->exp (simple1)]
@@ -197,13 +200,15 @@ becomes
 
 (K <<proc (var1, ..., varn k) (cps-of-exp k)>>)
 
+(Remember, that's concrete syntax.  The actual emitted form
+would be (make-send-to-cont K (cps-proc-exp ...)).)
+
 When translating expressions with operands, the translator
 has to handle both simple and non-simple expressions.  The
 simple ones can be evaluated directly, but the others need
 to be evaluated in a continuation that continues the operand
-evaluation.  For example, a variadic sum form (which CPS-IN
-doesn't actually have, but whatever) could have only simple
-operands:
+evaluation.  For example, a variadic sum form could have only
+simple operands:
 
 (cps-of-exp <<+(simp1 ..., simpn)>> K)
   = (K +(simp1, ..., simpn))
@@ -220,3 +225,8 @@ Proceeding recursively, the expression will be "unnested" into
 a series of tail-calls, with a sum expression of simple operands
 at the bottom (with var-exps holding the places of the complex
 operands).
+
+Application follows similar rules.  Both the operator and operands
+can be simple or non-simple; if any are non-simple, then evaluation
+is unnested and variable expressions replace the non-simple
+subexpressions.
