@@ -56,7 +56,7 @@
               `(proc-val
                 (proc ,(list-ref b-varss n)
                       ,(list-ref p-bodies n)
-                      env))))
+                      ,env))))
            (else (apply-env env* search-var))))
     (? (error 'apply-env "invalid environment" env))))
 
