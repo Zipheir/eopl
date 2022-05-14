@@ -23,11 +23,11 @@
 
 ;; list-set : List x Int x Scheme-val -> List
 (define (list-set xs k y)
-  (if (zero? k)
-      (cons y xs)
-      (pmatch xs
-        (() (error 'list-set "short list"))
-        ((,x . ,xs*)
+  (pmatch xs
+    (() (error 'list-set "short list"))
+    ((,x . ,xs*)
+     (if (zero? k)
+         (cons y xs*)
          (cons x (list-set xs* (- k 1) y))))))
 
 ;;; Simple gensyms
@@ -124,7 +124,7 @@
             (append b-vars (list 'k%00)))
           b-varss)
     ,(map (lambda (p-body)
-            `(cps-of-exp ,p-body (cps-var-exp k%00)))
+            (cps-of-exp p-body `(cps-var-exp k%00)))
           p-bodies)
     ,(cps-of-exp lr-body k-exp)))
 
