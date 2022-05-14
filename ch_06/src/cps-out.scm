@@ -41,7 +41,7 @@
 
 ;; extend-env-rec** : List-of(Var) x List-of(List-of(Var)) x
 ;;                      List-of(Exp-val) x Env -> Env
-(define (extend-env-rec p-names b-varss p-bodies env)
+(define (extend-env-rec** p-names b-varss p-bodies env)
   (cons (list 'ext-env-rec p-names b-varss p-bodies) env))
 
 ;; apply-env : Env x Var -> Scheme-val
@@ -141,7 +141,7 @@
      `(num-val ,(- (value-of-simple-exp simple1 env)
                    (value-of-simple-exp simple2 env))))
     ((cps-zero?-exp ,simple1)
-     `(bool-val ,(zero? (value-of-simple-exp simple))))
+     `(bool-val ,(zero? (value-of-simple-exp simple env))))
     ((cps-proc-exp ,vars ,body)
      `(proc-val (proc ,vars ,body ,env)))
     (? (error 'value-of-simple-exp
