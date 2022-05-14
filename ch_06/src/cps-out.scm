@@ -1,7 +1,5 @@
 ;;;; CPS-OUT interpreter from Ch. 6
 
-(import (rnrs base (6)))
-
 (include "../../src/pmatch.scm")
 (include "../../src/test.scm")
 
