@@ -97,20 +97,20 @@
   (pmatch exp
     ((simple-exp->exp ,simple)
      (apply-cont cont (value-of-simple-exp simple env)))
-    ((let-exp ,var ,rhs ,body)
+    ((cps-let-exp ,var ,rhs ,body)
      (let ((val (value-of-simple-exp rhs env)))
        (value-of/k body
                    (extend-env* (list var) (list val) env)
                    cont)))
-    ((letrec-exp ,p-names ,b-varss ,p-bodies ,letrec-body)
+    ((cps-letrec-exp ,p-names ,b-varss ,p-bodies ,letrec-body)
      (value-of/k letrec-body
                  (extend-env-rec** p-names b-varss p-bodies env)
                  cont))
-    ((if-exp ,simple1 ,body1 ,body2)
+    ((cps-if-exp ,simple1 ,body1 ,body2)
      (if (expval->bool (value-of-simple-exp simple1 env))
          (value-of/k body1 env cont)
          (value-of/k body2 env cont)))
-    ((call-exp ,rator ,rands)
+    ((cps-call-exp ,rator ,rands)
      (let ((proc (expval->proc (value-of-simple-exp rator env)))
            (vals (map (lambda (s) (value-of-simple-exp s env))
                       rands)))
@@ -133,13 +133,15 @@
 ;; value-of-simple-exp : Simple-exp x Env -> Exp-val
 (define (value-of-simple-exp simple env)
   (pmatch simple
-    ((const-exp ,num) `(num-val ,num))
-    ((var-exp ,var) (apply-env env var))
+    ((cps-const-exp ,num) `(num-val ,num))
+    ((cps-var-exp ,var) (apply-env env var))
     ((cps-diff-exp ,simple1 ,simple2)
-     `(num-val ,(- (value-of-simple-exp simple1 env)
-                   (value-of-simple-exp simple2 env))))
+     `(num-val
+       ,(- (expval->num (value-of-simple-exp simple1 env))
+           (expval->num (value-of-simple-exp simple2 env)))))
     ((cps-zero?-exp ,simple1)
-     `(bool-val ,(zero? (value-of-simple-exp simple env))))
+     `(bool-val
+       ,(zero? (expval->num (value-of-simple-exp simple env)))))
     ((cps-proc-exp ,vars ,body)
      `(proc-val (proc ,vars ,body ,env)))
     (? (error 'value-of-simple-exp
@@ -151,5 +153,5 @@
 ;; value-of-program : Program -> Final-answer
 (define (value-of-program pgm)
   (pmatch pgm
-    ((program ,tf-exp)
+    ((cps-program ,tf-exp)
      (value-of/k tf-exp (init-env) 'end-cont))))
