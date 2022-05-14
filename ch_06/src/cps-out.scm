@@ -102,7 +102,7 @@
     ((let-exp ,var ,rhs ,body)
      (let ((val (value-of-simple-exp rhs env)))
        (value-of/k body
-                   (extend-env (list var) (list val) env)
+                   (extend-env* (list var) (list val) env)
                    cont)))
     ((letrec-exp ,p-names ,b-varss ,p-bodies ,letrec-body)
      (value-of/k letrec-body
