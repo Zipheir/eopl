@@ -184,3 +184,53 @@
      (cps-of-letrec-exp nms vars pbs lr-body k-exp))
     ((call-exp ,rator ,rands) (cps-of-call-exp rator rands k-exp))
     (? (error 'cps-of-exp "invalid expression" exp))))
+
+;; cps-of-program : Inp-program -> Tf-program
+(define (cps-of-program pgm)
+  (pmatch pgm
+    ((program ,exp1)
+     `(cps-program
+       ,(cps-of-exps (list exp1)
+                     (lambda (new)
+                       `(simple-exp->exp ,(car new))))))))
+
+;;; Parser
+
+;; Parser for a simple S-exp representation.
+;; parse : List -> Exp
+(define (parse sexp)
+  (pmatch sexp
+    (,n (guard (number? n)) `(const-exp ,n))
+    ((- ,s ,t) `(diff-exp ,(parse s) ,(parse t)))
+    ((+ . ,es) `(sum-exp ,(map parse es)))
+    ((zero? ,s) `(zero?-exp ,(parse s)))
+    ((if ,t ,c ,a) `(if-exp ,(parse t) ,(parse c) ,(parse a)))
+    (,v (guard (symbol? v)) `(var-exp ,v))
+    ((let ,v = ,e in ,b) (guard (symbol? v))
+     `(let-exp ,v ,(parse e) ,(parse b)))
+    ((proc ,vs ,body) (guard (every symbol? vs))
+     `(proc-exp ,vs ,(parse body)))
+    ((letrec ,bs in ,body) (parse-letrec-exp bs body))
+    ((,e1 . ,es) `(call-exp ,(parse e1) ,(map parse es)))
+    (? (error 'parse "invalid syntax" sexp))))
+
+(define (parse-letrec-exp binds body)
+  (let* ((f (lambda args
+              (pmatch args
+                (((,nm ,vs = ,e) (,names ,b-varss ,bodies))
+                 (guard (symbol? nm) (every symbol? vs))
+                 (list (cons nm names)
+                       (cons vs b-varss)
+                       (cons (parse e) bodies))))))
+         (ts (fold-right f '(() () ()) binds)))
+    (pmatch ts
+      ((,names ,vars ,bodies)
+       `(letrec-exp ,names ,vars ,bodies ,(parse body))))))
+
+;; parse-program : List -> Program
+(define (parse-program sexp)
+  (list 'program (parse sexp)))
+
+;; run : List x Bool -> Tf-program
+(define (translate sexp)
+  (cps-of-program (parse-program sexp)))
