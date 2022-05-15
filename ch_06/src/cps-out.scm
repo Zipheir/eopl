@@ -141,12 +141,12 @@
            (expval->num (value-of-simple-exp simple2 env)))))
     ((cps-zero?-exp ,simple1)
      `(bool-val
-       ,(zero? (expval->num (value-of-simple-exp simple env)))))
+       ,(zero? (expval->num (value-of-simple-exp simple1 env)))))
     ((cps-proc-exp ,vars ,body)
      `(proc-val (proc ,vars ,body ,env)))
     (? (error 'value-of-simple-exp
               "invalid simple expression"
-              exp))))
+              simple))))
 
 ;;; Programs
 
