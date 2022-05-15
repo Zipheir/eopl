@@ -276,11 +276,11 @@
 
   ;;; Calls with non-simple operands.
 
-  (test 5 (eval-to-num
+  (test 9 (eval-to-num
            '((proc (x y) (+ x y))
              (let a = 7 in a)
              (let b = 2 in b))))
   (test 5 (eval-to-num
-           '(+ ((proc (a) (- a 2)) 1)
+           '(+ ((proc (a) (- a 2)) 3)
                ((proc (b) (if (zero? b) 4 6)) 0))))
   )
