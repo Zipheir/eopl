@@ -4,7 +4,11 @@
         (rename (rnrs lists (6)) (for-all every))
         )
 
+(include "cps-out-library.scm")
+(import (cps-out))
+
 (include "../../src/pmatch.scm")
+(include "../../src/test.scm")
 
 ;;; Utility
 
@@ -232,3 +236,41 @@
 ;; run : List x Bool -> Tf-program
 (define (translate sexp)
   (cps-of-program (parse-program sexp)))
+
+;;;; Tests
+
+(define (run-tests)
+  (define (eval-to-num lis)
+    (expval->num (value-of-program (translate lis))))
+
+  (test 5 (eval-to-num '5))
+  (test 5 (eval-to-num 'v))
+  (test 0 (eval-to-num '(if (zero? 2) 1 0)))
+  (test 1 (eval-to-num '(if (zero? 0) 1 0)))
+  (test 1 (eval-to-num '(- 3 2)))
+  (test 4 (eval-to-num '(let a = (- v i) in a)))
+  (test 6 (eval-to-num
+           '(let add1 = (proc (a) (- a (- 0 1))) in (add1 v))))
+  (test 5 (eval-to-num
+           '(let add1 = (proc (b) (- b (- 0 1))) in
+              (letrec ((f (a) = (if (zero? a) 0 (add1 (f (- a 1))))))
+               in (f 5)))))
+  (test 1 (eval-to-num
+           '(letrec ((even (x) = (if (zero? x) 1 (odd (- x 1))))
+                     (odd (x) = (if (zero? x) 0 (even (- x 1)))))
+             in (even 4))))
+  (test 0 (eval-to-num
+           '(letrec ((even (x) = (if (zero? x) 1 (odd (- x 1))))
+                     (odd (x) = (if (zero? x) 0 (even (- x 1)))))
+             in (even 5))))
+
+  ;;; Multi-arg procs
+
+  (test 5 (eval-to-num
+           '(let add = (proc (x y) (- x (- 0 y))) in
+              (add (add 1 1) (add 1 (add 1 1))))))
+  (test 5 (eval-to-num
+           '(letrec ((f (x y z) = (- x (- y z)))) in
+              (f 8 5 2))))
+  (test 5 (eval-to-num '(let t = (proc () 5) in (t))))
+  )
