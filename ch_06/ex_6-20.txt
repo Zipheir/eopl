@@ -1,0 +1,28 @@
+# Exercise 6.20
+
+This modifies the ->CPS translator to produce code that causes
+subexpressions to be evaluated from right to left.  That is,
+the expression (f e1 e2 s3) (where s3 is a simple expression
+and e2 and e3 aren't) should be translated to something like
+
+,(cps-of-exp
+  e2
+  `(cps-proc-exp
+    (var02)
+    ,(cps-of-exp
+      e1
+      `(cps-proc-exp
+        (var01)
+        (cps-call-exp
+         (cps-var-exp f)
+         ((cps-var-exp var01) (cps-var-exp var02)
+          ,(cps-of-simple-exp s3)))))))
+
+The evaluation order of simple expressions doesn't change,
+since that's handled by the CPS-OUT intepreter; it's easy enough
+to switch that program to use right-to-left evaluation, though.
+
+Since cps-of-exps evaluates subexpressions, all of the changes
+should happen there.  In fact, the only change should be to
+replace list-index with a variant, list-index-right, which returns
+the *last* element of a list satisfying a predicate.
