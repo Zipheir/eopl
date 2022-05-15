@@ -83,7 +83,10 @@
 
 ;; make-send-to-cont : Simple-exp x Simple-exp -> Tf-exp
 (define (make-send-to-cont k-exp simple)
-  `(cps-call-exp ,k-exp ,(list simple)))
+  (pmatch k-exp
+    ((cps-proc-exp (,v) ,e)
+     `(cps-let-exp ,v ,simple ,e))
+    (? `(cps-call-exp ,k-exp ,(list simple)))))
 
 ;; cps-of-sum-exp : List-of(Inp-exp) x Simple-exp -> Tf-exp
 (define (cps-of-sum-exp exps k-exp)
