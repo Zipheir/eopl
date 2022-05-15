@@ -139,6 +139,11 @@
      `(num-val
        ,(- (expval->num (value-of-simple-exp simple1 env))
            (expval->num (value-of-simple-exp simple2 env)))))
+    ((cps-sum-exp ,simples)
+     `(num-val
+       ,(apply + (map (lambda (s)
+                        (expval->num (value-of-simple-exp s env)))
+                      simples))))
     ((cps-zero?-exp ,simple1)
      `(bool-val
        ,(zero? (expval->num (value-of-simple-exp simple1 env)))))
