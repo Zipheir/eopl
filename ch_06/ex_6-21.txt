@@ -1,0 +1,14 @@
+# Exercise 6.21
+
+To produce code that evaluates operands before the operator in a
+call expression, I can change cps-of-call-exp as follows:
+
+(define (cps-of-call-exp rator rands k-exp)
+  (cps-of-exps
+   (append rands (list rator))
+   (lambda (sms)
+     (cps-call-exps
+      (last sms)
+      (append (init sms) (list k-exp))))))
+
+(This assumes that cps-of-exps is still producing LR code.)
