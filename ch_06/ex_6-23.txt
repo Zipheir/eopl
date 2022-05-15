@@ -1,0 +1,48 @@
+# Exercise 6.23
+
+The way the translator currently handles if expressions results
+in exponential growth of the output program, since it makes two
+copies of the continuation for each if expression.  This is only
+a problem when the *test* expression is itself an if expression.
+Example:
+
+(cps-of-exp <if <if b e1 e2> x1 x2> K)
+
+= (cps-of-exp <if b e1 e2>
+              <proc (var1)
+                <if var1
+                    (cps-of-exp x1 K)
+                    (cps-of-exp x2 K)>>)
+
+= (cps-of-exp <b>
+              <proc (var2)
+                <if var2
+                    (cps-of-exp e1
+                                <proc (var1)
+                                  <if var1 ...>>)
+                    (cps-of-exp e1
+                                <proc (var1)
+                                  <if var1 ...>>)>>)
+
+Not good, even if the language doesn't have enough ways of working
+with booleans to make nested ifs useful.  This can be fixed by
+binding the continuation to a fresh variable (in the target language)
+and replacing the continuation with a variable expression:
+
+(define (cps-of-if-exp exp1 exp2 exp3 k-exp)
+  (cps-of-exps
+   (list exp1)
+   (lambda (sms)
+     (let ((k (fresh-identifier 'k)))
+       `(cps-let-exp
+         ,k
+         ,k-exp
+         (cps-if-exp ,(car sms)
+                     ,(cps-of-exp exp2 `(cps-var-exp ,k))
+                     ,(cps-of-exp exp3 `(cps-var-exp ,k))))))))
+
+With this change, only one copy of the continuation is stored
+for each nested if expression.
+
+cps-of-if-exp could be optimized further to omit this binding (and
+the use of cps-of-exps) when the test expression (exp1) is simple.
