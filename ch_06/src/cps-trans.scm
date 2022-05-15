@@ -109,9 +109,13 @@
   (cps-of-exps
    (list exp1)
    (lambda (sms)
-     `(cps-if-exp ,(car sms)
-                  ,(cps-of-exp exp2 k-exp)
-                  ,(cps-of-exp exp3 k-exp)))))
+     (let ((k (fresh-identifier 'k)))
+       `(cps-let-exp
+         ,k
+         ,k-exp
+         (cps-if-exp ,(car sms)
+                     ,(cps-of-exp exp2 `(cps-var-exp ,k))
+                     ,(cps-of-exp exp3 `(cps-var-exp ,k))))))))
 
 ;; cps-of-let-exp : Var x Inp-exp x Inp-exp x Simple-exp -> Tf-exp
 (define (cps-of-let-exp id rhs body k-exp)
