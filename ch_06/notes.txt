@@ -88,6 +88,17 @@ optimized representation of a continuation!
 
 ## 6.2 Tail form
 
+This section establishes the source and target languages for the
+to-CPS translator.  The book does not make it very clear what's
+going on, so here's the idea: We are translating a language with
+"compound" expressions into a language without them.  The target
+language is *not* a CPSed language; it has procedures that return
+values, and, in fact, it only has the trivial "end" continuation
+(which can easily be eliminated, as in one of the exercises).
+What the ->CPS translator does is translate input expressions to
+a CPS language implemented *on top of* the target language, using
+a target-language-procedural representation of continuations.
+
 The input language for the CPS translation will be LETREC with
 multi-argument procedures and letrec bindings.  This language
 will be called CPS-IN, and expressions in it will be called
