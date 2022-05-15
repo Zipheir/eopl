@@ -1,0 +1,25 @@
+# Exercise 6.22
+
+This modifies the ->CPS translator's make-send-to-cont function
+to produce let expressions in some cases, specifically those where
+the continuation being applied is a procedure expression.  The
+change is easy; using my tagged-list implementation,
+
+(define (make-send-to-cont k-exp simple)
+  (pmatch k-exp
+    ((cps-proc-exp (,v) ,e)
+     `(cps-let-exp ,v ,simple ,e))
+    (? `cps-call-exp ,k-exp ,(list simple)))))
+
+The most important case where this change applies is with the
+continuation expressions created by cps-of-exps.
+
+I think this may be a *slight* improvement over the version that
+just emits applications.  A closure doesn't have to be allocated
+when a let expression is evaluated, so there's a small space
+savings.
+
+On the other hand, you'd probably want to simplify the target
+language further by removing let expressions entirely.  So a
+more general improvement would be to optimize all cases of applying
+a procedure expression so as to avoid closure allocation.
