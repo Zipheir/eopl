@@ -1,5 +1,5 @@
 (library (cps-out)
-  (export value-of-program)
+  (export value-of-program expval->num)
   (import (chezscheme))
   (include "cps-out.scm")
   )
