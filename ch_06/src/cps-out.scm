@@ -23,6 +23,12 @@
     ((proc-val ,p) p)
     (? (report-expval-extractor-error 'proc val))))
 
+;; expval->list : Exp-val -> List-of(Exp-val)
+(define (expval->list val)
+  (pmatch val
+    ((list-val ,xs) xs)
+    (? (report-expval-extractor-error 'list val))))
+
 (define (report-expval-extractor-error variant value)
   (error 'expval-extractors
          "unexpected type found"
@@ -133,6 +139,7 @@
 ;; value-of-simple-exp : Simple-exp x Env -> Exp-val
 (define (value-of-simple-exp simple env)
   (pmatch simple
+    (cps-emptylist-exp `(list-val ()))
     ((cps-const-exp ,num) `(num-val ,num))
     ((cps-var-exp ,var) (apply-env env var))
     ((cps-diff-exp ,simple1 ,simple2)
@@ -149,6 +156,21 @@
        ,(zero? (expval->num (value-of-simple-exp simple1 env)))))
     ((cps-proc-exp ,vars ,body)
      `(proc-val (proc ,vars ,body ,env)))
+    ((cps-cons-exp ,simple1 ,simple2)
+     `(list-val
+       ,(cons (value-of-simple-exp simple1 env)
+              (expval->list (value-of-simple-exp simple2 env)))))
+    ((cps-car-exp ,simple1)
+     (car (expval->list (value-of-simple-exp simple1 env))))
+    ((cps-cdr-exp ,simple1)
+     `(list-val
+       ,(cdr (expval->list (value-of-simple-exp simple1 env)))))
+    ((cps-null?-exp ,simple1)
+     `(bool-val
+       ,(null? (expval->list (value-of-simple-exp simple1 env)))))
+    ((cps-list-exp ,simples)
+     `(list-val
+       ,(map (lambda (s) (value-of-simple-exp s env)) simples)))
     (? (error 'value-of-simple-exp
               "invalid simple expression"
               simple))))

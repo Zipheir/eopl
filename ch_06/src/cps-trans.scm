@@ -72,6 +72,7 @@
 ;; inp-exp-simple? : Inp-exp -> Bool
 (define (inp-exp-simple? exp)
   (pmatch exp
+    (emptylist-exp #t)
     ((const-exp ?) #t)
     ((var-exp ?) #t)
     ((diff-exp ,exp1 ,exp2)
@@ -79,6 +80,12 @@
     ((zero?-exp ,exp1) (inp-exp-simple? exp1))
     ((proc-exp ? ?) #t)
     ((sum-exp ,exps) (every inp-exp-simple? exps))
+    ((car-exp ,exp1) (inp-exp-simple? exp1))
+    ((cdr-exp ,exp1) (inp-exp-simple? exp1))
+    ((cons-exp ,exp1 ,exp2)
+     (and (inp-exp-simple? exp1) (inp-exp-simple? exp2)))
+    ((null?-exp ,exp1) (inp-exp-simple? exp1))
+    ((list-exp ,exps) (every inp-exp-simple? exps))
     (? #f)))
 
 ;; make-send-to-cont : Simple-exp x Simple-exp -> Tf-exp
@@ -144,6 +151,7 @@
 ;; cps-of-simple-exp : Simple-inp-exp -> Simple-exp
 (define (cps-of-simple-exp exp)
   (pmatch exp
+    (emptylist-exp 'cps-emptylist-exp)
     ((const-exp ,num) `(cps-const-exp ,num))
     ((var-exp ,var) `(cps-var-exp ,var))
     ((diff-exp ,exp1 ,exp2)
@@ -156,6 +164,14 @@
                     ,(cps-of-exp body '(cps-var-exp k%00))))
     ((sum-exp ,exps)
      `(cps-sum-exp ,(map cps-of-simple-exp exps)))
+    ((cons-exp ,exp1 ,exp2)
+     `(cps-cons-exp ,(cps-of-simple-exp exp1)
+                    ,(cps-of-simple-exp exp2)))
+    ((car-exp ,exp1) `(cps-car-exp ,(cps-of-simple-exp exp1)))
+    ((cdr-exp ,exp1) `(cps-cdr-exp ,(cps-of-simple-exp exp1)))
+    ((null?-exp ,exp1) `(cps-null?-exp ,(cps-of-simple-exp exp1)))
+    ((list-exp ,exps)
+     `(cps-list-exp ,(map cps-of-simple-exp exps)))
     (? (error 'cps-of-simple-exp "invalid simple exp" exp))))
 
 ;; cps-of-call-exp : Inp-exp x List-of(Inp-exp) x Simple-exp -> Tf-exp
@@ -174,11 +190,39 @@
                   k-exp
                   `(cps-zero?-exp ,(car sms))))))
 
+;; cps-of-cons-exp : Inp-exp x Inp-exp x Simple-exp -> Tf-exp
+(define (cps-of-cons-exp exp1 exp2 k-exp)
+  (cps-of-exps
+   (list exp1 exp2)
+   (lambda (sms)
+     (pmatch sms
+       ((,s1 ,s2)
+        (make-send-to-cont k-exp
+                           `(cps-cons-exp ,s1 ,s2)))))))
+
+;; cps-of-unary : Sym x Inp-exp x Simple-exp -> Tf-exp
+;;
+;; Translate a unary form.
+(define (cps-of-unary out-form exp1 k-exp)
+  (cps-of-exps
+   (list exp1)
+   (lambda (sms)
+     (make-send-to-cont k-exp
+                        (list out-form (car sms))))))
+
+;; cps-of-list-exp : List-of(Inp-exp) x Simple-exp -> Tf-exp
+(define (cps-of-list-exp exps k-exp)
+  (cps-of-exps
+   exps
+   (lambda (sms)
+     (make-send-to-cont k-exp `(cps-list-exp ,sms)))))
+
 ;;; Main translator dispatch
 
 ;; cps-of-exp : Inp-exp x Simple-exp -> Tf-exp
 (define (cps-of-exp exp k-exp)
   (pmatch exp
+    (emptylist-exp (make-send-to-cont k-exp 'cps-emptylist-exp))
     ((const-exp ,num)
      (make-send-to-cont k-exp `(cps-const-exp ,num)))
     ((var-exp ,var)
@@ -196,6 +240,11 @@
     ((letrec-exp ,nms ,vars ,pbs ,lr-body)
      (cps-of-letrec-exp nms vars pbs lr-body k-exp))
     ((call-exp ,rator ,rands) (cps-of-call-exp rator rands k-exp))
+    ((cons-exp ,exp1 ,exp2) (cps-of-cons-exp exp1 exp2 k-exp))
+    ((car-exp ,exp1) (cps-of-unary 'cps-car-exp exp1 k-exp))
+    ((cdr-exp ,exp1) (cps-of-unary 'cps-cdr-exp exp1 k-exp))
+    ((null?-exp ,exp1) (cps-of-unary 'cps-null?-exp exp1 k-exp))
+    ((list-exp ,exps) (cps-of-list-exp exps k-exp))
     (? (error 'cps-of-exp "invalid expression" exp))))
 
 ;; cps-of-program : Inp-program -> Tf-program
@@ -213,6 +262,7 @@
 ;; parse : List -> Exp
 (define (parse sexp)
   (pmatch sexp
+    (emptylist 'emptylist-exp)
     (,n (guard (number? n)) `(const-exp ,n))
     ((- ,s ,t) `(diff-exp ,(parse s) ,(parse t)))
     ((+ . ,es) `(sum-exp ,(map parse es)))
@@ -224,6 +274,11 @@
     ((proc ,vs ,body) (guard (every symbol? vs))
      `(proc-exp ,vs ,(parse body)))
     ((letrec ,bs in ,body) (parse-letrec-exp bs body))
+    ((cons ,e1 ,e2) `(cons-exp ,(parse e1) ,(parse e2)))
+    ((car ,e) `(car-exp ,(parse e)))
+    ((cdr ,e) `(cdr-exp ,(parse e)))
+    ((null? ,e) `(null?-exp ,(parse e)))
+    ((list . ,es) `(list-exp ,(map parse es)))
     ((,e1 . ,es) `(call-exp ,(parse e1) ,(map parse es)))
     (? (error 'parse "invalid syntax" sexp))))
 
@@ -253,6 +308,10 @@
 (define (run-tests)
   (define (eval-to-num lis)
     (expval->num (value-of-program (translate lis))))
+
+  (define (eval-to-num-list lis)
+    (map expval->num
+         (expval->list (value-of-program (translate lis)))))
 
   (test 5 (eval-to-num '5))
   (test 5 (eval-to-num 'v))
@@ -294,4 +353,43 @@
   (test 5 (eval-to-num
            '(+ ((proc (a) (- a 2)) 3)
                ((proc (b) (if (zero? b) 4 6)) 0))))
+
+  ;;; Lists
+
+  ;; Lots of extra lets & calls to ensure that the non-simple
+  ;; branches get tested.
+  (test '() (eval-to-num-list 'emptylist))
+  (test '() (eval-to-num-list
+             '(let x = emptylist in
+                ((proc (y) y) x))))
+  (test '(1) (eval-to-num-list '(cons 1 emptylist)))
+  (test '(2 3) (eval-to-num-list
+                '(let id = (proc (y) y) in
+                   (cons (id 2) (cons 3 (id emptylist))))))
+  (test 2 (eval-to-num '(car (cons 2 emptylist))))
+  (test 2 (eval-to-num
+           '(let id = (proc (y) y) in
+              (car (id (cons 2 (cons (id 3) emptylist)))))))
+  (test '() (eval-to-num-list '(cdr (cons 2 emptylist))))
+  (test '(3) (eval-to-num-list
+              '(let id = (proc (y) y) in
+                 (cdr (id (cons (id 2) (cons 3 emptylist)))))))
+  (test 1 (eval-to-num '(if (null? emptylist) 1 0)))
+  (test 0 (eval-to-num '(if (null? (cons 1 emptylist)) 1 0)))
+  (test 1 (eval-to-num
+           '(if (null? (let xs = emptylist in xs))
+                1
+                0)))
+  (test '() (eval-to-num-list '(list)))
+  (test '(2 3) (eval-to-num-list '(list 2 3)))
+  (test '(2 4 5) (eval-to-num-list
+                  '(let xs = (list 2 3) in
+                     (let ys = (list 4 5) in
+                       (cons (car xs) ys)))))
+  (test '(2 3) (eval-to-num-list
+                '(list (let x = 2 in x)
+                       (let y = 0 in
+                         (if (zero? y)
+                             (let v = 3 in v)
+                             0)))))
   )
