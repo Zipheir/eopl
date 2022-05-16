@@ -106,16 +106,20 @@
 
 ;; cps-of-if-exp : Inp-exp x Inp-exp x Inp-exp x Simple-exp -> Tf-exp
 (define (cps-of-if-exp exp1 exp2 exp3 k-exp)
-  (cps-of-exps
-   (list exp1)
-   (lambda (sms)
-     (let ((k (fresh-identifier 'k)))
-       `(cps-let-exp
-         ,k
-         ,k-exp
-         (cps-if-exp ,(car sms)
-                     ,(cps-of-exp exp2 `(cps-var-exp ,k))
-                     ,(cps-of-exp exp3 `(cps-var-exp ,k))))))))
+  (if (inp-exp-simple? exp1)
+      `(cps-if-exp ,(cps-of-simple-exp exp1)
+                   ,(cps-of-exp exp2 k-exp)
+                   ,(cps-of-exp exp3 k-exp))
+      (cps-of-exps
+       (list exp1)
+       (lambda (sms)
+         (let ((k (fresh-identifier 'k)))
+           `(cps-let-exp
+             ,k
+             ,k-exp
+             (cps-if-exp ,(car sms)
+                         ,(cps-of-exp exp2 `(cps-var-exp ,k))
+                         ,(cps-of-exp exp3 `(cps-var-exp ,k)))))))))
 
 ;; cps-of-let-exp : Var x Inp-exp x Inp-exp x Simple-exp -> Tf-exp
 (define (cps-of-let-exp id rhs body k-exp)
