@@ -47,27 +47,29 @@
 
 ;; cps-of-exps : List-of(Inp-exp) x (List-of(Inp-exp) -> Tf-exp) ->
 ;;		   Tf-exp
-;; Usage: CPSs a list of subexpressions.  The translated list is
-;; passed to builder.
 (define (cps-of-exps exps builder)
   (letrec
    ((cps-of-rest
-     (lambda (exps)
-       (let ((pos (list-index
-                   (lambda (exp)
-	             (not (inp-exp-simple? exp)))
-	           exps)))
-	 (if (not pos)
-	     (builder (map cps-of-simple-exp exps))
-	     (let ((var (fresh-identifier 'var)))
-	       (cps-of-exp (list-ref exps pos)
-	                   `(cps-proc-exp
-	                     ,(list var)
-	                     ,(cps-of-rest
-	                       (list-set exps
-	                                 pos
-	                                 `(var-exp ,var)))))))))))
-    (cps-of-rest exps)))
+     (lambda (exps acc)
+       (pmatch exps
+         (() (builder (reverse acc)))
+         ((,e . ,es)
+          (if (inp-exp-simple? e)
+              (cps-of-rest es (cons (cps-of-simple-exp e) acc))
+              (make-bind e es acc))))))
+
+    (make-bind
+     (lambda (exp rest-exps acc)
+       (let ((var (fresh-identifier 'var)))
+         (cps-of-exp exp
+                     `(cps-proc-exp
+                       (,var)
+                       ,(cps-of-rest
+                         rest-exps
+                         (cons (cps-of-simple-exp `(var-exp ,var))
+                               acc))))))))
+
+    (cps-of-rest exps '())))
 
 ;; inp-exp-simple? : Inp-exp -> Bool
 (define (inp-exp-simple? exp)
