@@ -1,0 +1,25 @@
+# Exercise 6.27
+
+The translator for let expressions usually (always?) produces
+a useless let, since cps-of-exps unnests the bound expression
+and produces a binding already:
+
+(translate '(let x = 4 in x))
+
+=> (cps-program
+    (cps-let-exp
+     x
+     (cps-const-exp 4)
+     (cps-let-exp
+      var0
+      (cps-var-exp x)
+      (simple-exp->exp (cps-var-exp var0)))))
+
+I'd like to produce a translation of this without the inner let,
+but it's not clear to me how to do this.  The var0 gensym in
+the example is produced by cps-of-exps *before* cps-of-let-exp
+is called, so there's no way to rewrite the let translator to
+avoid this.  A very ugly hack would be to create a special let
+case for cps-of-exps which pulls out the bound variable of a
+let-exp and creates a binding for it.  But there's got to be a
+better way.
