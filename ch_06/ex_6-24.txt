@@ -1,0 +1,61 @@
+# Exercise 6.24
+
+This adds lists to both the CPS-IN and CPS-OUT languages.  I'm not
+sure whether every list expression of the source language will have
+an analogue in the target.  Let's look at CPS-IN first.
+
+The list forms are familiar:
+
+Inp-exp ::= emptylist
+            [emptylist-exp]
+
+        ::= cons(Inp-exp, Inp-exp)
+            [cons-exp (exp1 exp2)]
+
+        ::= car(Inp-exp)
+            [car-exp (exp1)]
+
+        ::= cdr(Inp-exp)
+            [cdr-exp (exp1)]
+
+        ::= null?(Inp-exp)
+            [null?-exp (exp1)]
+
+        ::= list({Inp-exp}*(,)})
+            [list-exp (exps)]
+
+These forms give lots of new operand (O) positions:
+
+cons(O, O)
+car(O)
+cdr(O)
+null?(O)
+list(O, O, ...)
+
+Now, what do I add to CPS-OUT?  Starting with the easy stuff,
+
+Simple-exp ::= emptylist
+               [cps-emptylist-exp]
+
+           ::= cons(Simple-exp, Simple-exp)
+               [cps-cons-exp (simple1 simple2)]
+
+           ::= car(Simple-exp)
+               [cps-car-exp (simple1)]
+
+           ::= cdr(Simple-exp)
+               [cps-cdr-exp (simple1)]
+
+           ::= null?(Simple-exp)
+               [cps-null?-exp (simple1)]
+
+           ::= list({Simple-exp}*(,))
+               [cps-list-exp (simples)]
+
+So no Tf-exps have to be added to the language.  The translators
+for these forms are all very straightforward.  The translation of
+*list* follows that of *sum* expressions exactly.
+
+Adding lists to the CPS-OUT is also very easy, and much like
+previous exercises.  See the ex-6.24 tag for the extended compiler
+and interpreter.
