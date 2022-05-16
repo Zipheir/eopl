@@ -23,3 +23,9 @@ avoid this.  A very ugly hack would be to create a special let
 case for cps-of-exps which pulls out the bound variable of a
 let-exp and creates a binding for it.  But there's got to be a
 better way.
+
+I'm not really sure what the book has in mind, since the authors
+write "modify this procedure [cps-of-let-exp] so that the
+continuation variable is the same as the let variable".  There's
+no way to do this, since the "continuation variable" is the gensym
+created by cps-of-exps.
