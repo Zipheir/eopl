@@ -92,7 +92,7 @@
 (define (make-send-to-cont k-exp simple)
   (pmatch k-exp
     ((cps-proc-exp (,v) ,e)
-     `(cps-let-exp ,v ,simple ,e))
+     `(cps-let-exp (,v) (,simple) ,e))
     (? `(cps-call-exp ,k-exp ,(list simple)))))
 
 ;; cps-of-sum-exp : List-of(Inp-exp) x Simple-exp -> Tf-exp
@@ -122,18 +122,18 @@
        (lambda (sms)
          (let ((k (fresh-identifier 'k)))
            `(cps-let-exp
-             ,k
-             ,k-exp
+             (,k)
+             (,k-exp)
              (cps-if-exp ,(car sms)
                          ,(cps-of-exp exp2 `(cps-var-exp ,k))
                          ,(cps-of-exp exp3 `(cps-var-exp ,k)))))))))
 
 ;; cps-of-let-exp : Var x Inp-exp x Inp-exp x Simple-exp -> Tf-exp
-(define (cps-of-let-exp id rhs body k-exp)
+(define (cps-of-let-exp ids rhss body k-exp)
   (cps-of-exps
-   (list rhs)
+   rhss
    (lambda (sms)
-     `(cps-let-exp ,id ,(car sms) ,(cps-of-exp body k-exp)))))
+     `(cps-let-exp ,ids ,sms ,(cps-of-exp body k-exp)))))
 
 ;; cps-of-letrec-exp : List-of(Var) x List-of(List-of(Var)) x
 ;;                       List-of(Inp-exp) x Simple-exp -> Tf-exp
@@ -228,7 +228,7 @@
     ((diff-exp ,exp1 ,exp2) (cps-of-diff-exp exp1 exp2 k-exp))
     ((sum-exp ,exps) (cps-of-sum-exp exps k-exp))
     ((if-exp ,exp1 ,exp2 ,exp3) (cps-of-if-exp exp1 exp2 exp3 k-exp))
-    ((let-exp ,var ,exp1 ,body) (cps-of-let-exp var exp1 body k-exp))
+    ((let-exp ,vars ,rhss ,body) (cps-of-let-exp vars rhss body k-exp))
     ((letrec-exp ,nms ,vars ,pbs ,lr-body)
      (cps-of-letrec-exp nms vars pbs lr-body k-exp))
     ((call-exp ,rator ,rands) (cps-of-call-exp rator rands k-exp))
@@ -261,8 +261,7 @@
     ((zero? ,s) `(zero?-exp ,(parse s)))
     ((if ,t ,c ,a) `(if-exp ,(parse t) ,(parse c) ,(parse a)))
     (,v (guard (symbol? v)) `(var-exp ,v))
-    ((let ,v = ,e in ,b) (guard (symbol? v))
-     `(let-exp ,v ,(parse e) ,(parse b)))
+    ((let ,bs in ,b) (parse-let-exp bs b))
     ((proc ,vs ,body) (guard (every symbol? vs))
      `(proc-exp ,vs ,(parse body)))
     ((letrec ,bs in ,body) (parse-letrec-exp bs body))
@@ -287,6 +286,19 @@
       ((,names ,vars ,bodies)
        `(letrec-exp ,names ,vars ,bodies ,(parse body))))))
 
+;; parse-let-exp : List x List -> Exp
+(define (parse-let-exp binds body)
+  (letrec
+    ((collect
+      (lambda (bs vars vals)
+        (pmatch bs
+          (() (values vars vals))
+          (((,v = ,e) . ,bs*) (guard (symbol? v))
+           (collect bs* (cons v vars) (cons (parse e) vals)))))))
+
+    (let-values (((vars vals) (collect binds '() '())))
+      `(let-exp ,vars ,vals ,(parse body)))))
+
 ;; parse-program : List -> Program
 (define (parse-program sexp)
   (list 'program (parse sexp)))
@@ -310,11 +322,11 @@
   (test 0 (eval-to-num '(if (zero? 2) 1 0)))
   (test 1 (eval-to-num '(if (zero? 0) 1 0)))
   (test 1 (eval-to-num '(- 3 2)))
-  (test 4 (eval-to-num '(let a = (- v i) in a)))
+  (test 4 (eval-to-num '(let ((a = (- v i))) in a)))
   (test 6 (eval-to-num
-           '(let add1 = (proc (a) (- a (- 0 1))) in (add1 v))))
+           '(let ((add1 = (proc (a) (- a (- 0 1))))) in (add1 v))))
   (test 5 (eval-to-num
-           '(let add1 = (proc (b) (- b (- 0 1))) in
+           '(let ((add1 = (proc (b) (- b (- 0 1))))) in
               (letrec ((f (a) = (if (zero? a) 0 (add1 (f (- a 1))))))
                in (f 5)))))
   (test 1 (eval-to-num
@@ -329,19 +341,19 @@
   ;;; Multi-arg procs
 
   (test 5 (eval-to-num
-           '(let add = (proc (x y) (- x (- 0 y))) in
+           '(let ((add = (proc (x y) (- x (- 0 y))))) in
               (add (add 1 1) (add 1 (add 1 1))))))
   (test 5 (eval-to-num
            '(letrec ((f (x y z) = (- x (- y z)))) in
               (f 8 5 2))))
-  (test 5 (eval-to-num '(let t = (proc () 5) in (t))))
+  (test 5 (eval-to-num '(let ((t = (proc () 5))) in (t))))
 
   ;;; Calls with non-simple operands.
 
   (test 9 (eval-to-num
            '((proc (x y) (+ x y))
-             (let a = 7 in a)
-             (let b = 2 in b))))
+             (let ((a = 7)) in a)
+             (let ((b = 2)) in b))))
   (test 5 (eval-to-num
            '(+ ((proc (a) (- a 2)) 3)
                ((proc (b) (if (zero? b) 4 6)) 0))))
@@ -352,36 +364,36 @@
   ;; branches get tested.
   (test '() (eval-to-num-list 'emptylist))
   (test '() (eval-to-num-list
-             '(let x = emptylist in
+             '(let ((x = emptylist)) in
                 ((proc (y) y) x))))
   (test '(1) (eval-to-num-list '(cons 1 emptylist)))
   (test '(2 3) (eval-to-num-list
-                '(let id = (proc (y) y) in
+                '(let ((id = (proc (y) y))) in
                    (cons (id 2) (cons 3 (id emptylist))))))
   (test 2 (eval-to-num '(car (cons 2 emptylist))))
   (test 2 (eval-to-num
-           '(let id = (proc (y) y) in
+           '(let ((id = (proc (y) y))) in
               (car (id (cons 2 (cons (id 3) emptylist)))))))
   (test '() (eval-to-num-list '(cdr (cons 2 emptylist))))
   (test '(3) (eval-to-num-list
-              '(let id = (proc (y) y) in
+              '(let ((id = (proc (y) y))) in
                  (cdr (id (cons (id 2) (cons 3 emptylist)))))))
   (test 1 (eval-to-num '(if (null? emptylist) 1 0)))
   (test 0 (eval-to-num '(if (null? (cons 1 emptylist)) 1 0)))
   (test 1 (eval-to-num
-           '(if (null? (let xs = emptylist in xs))
+           '(if (null? (let ((xs = emptylist)) in xs))
                 1
                 0)))
   (test '() (eval-to-num-list '(list)))
   (test '(2 3) (eval-to-num-list '(list 2 3)))
   (test '(2 4 5) (eval-to-num-list
-                  '(let xs = (list 2 3) in
-                     (let ys = (list 4 5) in
+                  '(let ((xs = (list 2 3))) in
+                     (let ((ys = (list 4 5))) in
                        (cons (car xs) ys)))))
   (test '(2 3) (eval-to-num-list
-                '(list (let x = 2 in x)
-                       (let y = 0 in
+                '(list (let ((x = 2)) in x)
+                       (let ((y = 0)) in
                          (if (zero? y)
-                             (let v = 3 in v)
+                             (let ((v = 3)) in v)
                              0)))))
   )

@@ -103,11 +103,9 @@
   (pmatch exp
     ((simple-exp->exp ,simple)
      (apply-cont cont (value-of-simple-exp simple env)))
-    ((cps-let-exp ,var ,rhs ,body)
-     (let ((val (value-of-simple-exp rhs env)))
-       (value-of/k body
-                   (extend-env* (list var) (list val) env)
-                   cont)))
+    ((cps-let-exp ,vars ,rhss ,body)
+     (let ((vals (map (lambda (r) (value-of-simple-exp r env)) rhss)))
+       (value-of/k body (extend-env* vars vals env) cont)))
     ((cps-letrec-exp ,p-names ,b-varss ,p-bodies ,letrec-body)
      (value-of/k letrec-body
                  (extend-env-rec** p-names b-varss p-bodies env)
