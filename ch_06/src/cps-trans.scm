@@ -182,14 +182,6 @@
      `(cps-call-exp ,(car sms)
      		    ,(append (cdr sms) (list k-exp))))))
 
-;; cps-of-zero?-exp : Inp-exp x Simple-exp -> Tf-exp
-(define (cps-of-zero?-exp exp1 k-exp)
-  (cps-of-exps (list exp1)
-               (lambda (sms)
-                 (make-send-to-cont
-                  k-exp
-                  `(cps-zero?-exp ,(car sms))))))
-
 ;; cps-of-cons-exp : Inp-exp x Inp-exp x Simple-exp -> Tf-exp
 (define (cps-of-cons-exp exp1 exp2 k-exp)
   (cps-of-exps
@@ -232,7 +224,7 @@
       k-exp
       `(cps-proc-exp (append vars (list 'k%00))
                      (cps-of-exp body '(cps-var-exp k%00)))))
-    ((zero?-exp ,exp1) (cps-of-zero?-exp exp1 k-exp))
+    ((zero?-exp ,exp1) (cps-of-unary 'cps-zero?-exp exp1 k-exp))
     ((diff-exp ,exp1 ,exp2) (cps-of-diff-exp exp1 exp2 k-exp))
     ((sum-exp ,exps) (cps-of-sum-exp exps k-exp))
     ((if-exp ,exp1 ,exp2 ,exp3) (cps-of-if-exp exp1 exp2 exp3 k-exp))
