@@ -88,11 +88,71 @@
     ((list-exp ,exps) (every inp-exp-simple? exps))
     (? #f)))
 
-;; make-send-to-cont : Simple-exp x Simple-exp -> Tf-exp
+;; substitute-free : Var x Simple-exp x Tf-exp -> Tf-exp
+(define (substitute-free old new exp)
+  (letrec
+   ((subst-tf
+     (lambda (exp bvars)
+       (pmatch exp
+         ((simple-exp->exp ,simple)
+          `(simple-exp->exp ,(subst-simple simple bvars)))
+         ((cps-let-exp ,vars ,rhss ,body)
+          `(cps-let-exp ,vars ,rhss ,(subst-tf body
+                                               (append vars bvars))))
+         ((cps-letrec-exp ,nms ,bvs ,pbs ,lr-body)
+          `(cps-letrec-exp ,nms ,vs ,pbs
+                           ,(subst-tf lr-body (append vs bvars))))
+         ((cps-if-exp ,s1 ,exp2 ,exp3)
+          `(cps-if-exp ,(subst-simple s1 bvars)
+                       ,(subst-tf exp2 bvars)
+                       ,(subst-tf exp3 bvars)))
+         ((cps-call-exp ,rator ,rands)
+          `(cps-call-exp ,(subst-simple rator bvars)
+                         ,(map (lambda (s)
+                                 (subst-simple s bvars))
+                               rands))))))
+    (subst-simple
+     (lambda (exp bvars)
+       (pmatch exp
+         (cps-emptylist-exp exp)
+         ((cps-const-exp ,n) exp)
+         ((cps-var-exp ,v)
+          (if (and (eqv? v old) (not (memv v bvars)))
+              new
+              exp))
+         ((cps-diff-exp ,exp1 ,exp2)
+          `(cps-diff-exp ,(subst-simple exp1 bvars)
+                         ,(subst-simple exp2 bvars)))
+         ((cps-zero?-exp ,exp1)
+          `(cps-zero?-exp ,(subst-simple exp1 bvars)))
+         ((cps-proc-exp ,vars ,body)
+          `(cps-proc-exp ,vars ,(subst-tf body (append bvars vars))))
+         ((cps-sum-exp ,exps)
+          `(cps-sum-exp ,(map (lambda (e)
+                                (subst-simple e bvars))
+                              exps)))
+         ((cps-cons-exp ,exp1 ,exp2)
+          `(cps-cons-exp ,(subst-simple exp1 bvars)
+                         ,(subst-simple exp2 bvars)))
+         ((cps-car-exp ,exp1)
+          `(cps-car-exp ,(subst-simple exp1 bvars)))
+         ((cps-cdr-exp ,exp1)
+          `(cps-cdr-exp ,(subst-simple exp1 bvars)))
+         ((cps-null?-exp ,exp1)
+          `(cps-null?-exp ,(subst-simple exp1 bvars)))
+         ((cps-list-exp ,exps)
+          `(cps-list-exp ,(map (lambda (e)
+                                 (subst-simple e bvars))
+                               exps)))
+         (? (error 'substitute-free "invalid simple exp" exp))))))
+
+    (subst-tf exp '())))
+
+;; make-send-to-cont : Simple-exp x Simple-exp -> Simple-exp
 (define (make-send-to-cont k-exp simple)
   (pmatch k-exp
     ((cps-proc-exp (,v) ,e)
-     `(cps-let-exp (,v) (,simple) ,e))
+     (substitute-free v simple e))
     (? `(cps-call-exp ,k-exp ,(list simple)))))
 
 ;; cps-of-sum-exp : List-of(Inp-exp) x Simple-exp -> Tf-exp
