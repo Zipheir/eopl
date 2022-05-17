@@ -51,31 +51,12 @@ Constant and variable expressions require no translation:
 
 (anf-of-exp (var-exp v)) = (var-exp v)
 
-Basic compound expressions:
+For the rest, I had to get some help from the Flanagan, et al 1991
+paper on A-normal form.  The translation algorithm they give is
+pretty simple.  It's tail-recursive, and accumulates a continuation
+that emits all of the nested lets when the recursion bottoms-out.
+This avoids a problem that I hit right away with a recursive
+algorithm: translating nested expressions results in lets nested in
+their binding position.
 
-(anf-of-exp (zero?-exp exp1)) =
-  (anf-of-exp/ctx
-   exp1
-   (lambda (s1)
-     (anf-zero?-exp s1))))
-
-(anf-of-exp (diff-exp exp1 exp2)) =
-  (anf-of-exp/ctx
-   exp1
-   (lambda (s1)
-     (anf-of-exp/ctx
-      exp2
-      (lambda (s2)
-        (anf-diff-exp s1 s2))))))
-
-The anf-of-exp/ctx procedure takes an Inp-exp, transforms it to
-ANF, and returns a variable which will be bound to its value (or
-a const-exp).  For example:
-
-(anf-of-exp (zero?-exp (diff-exp (const-exp 3) (const-exp 1)))) =
-
-(let ((var41 (anf-diff-exp (const-exp 3) (const-exp 1))))
-  (anf-zero?-exp var41))
-
-Hopefully it's possible to get output this concise from the
-translator.
+See src/anf-trans.scm for the implementation.
