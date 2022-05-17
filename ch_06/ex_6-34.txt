@@ -1,0 +1,81 @@
+# Exercise 6.34
+
+Translating to A-normal form.  I need to redefine the target
+language, since the simple-exp/tail-form-exp distinction seems
+too strong: the target language should have operand-position
+procedure calls, though only as let-bound values.  OTOH, the
+requirement for simple expressions in "ANF-OUT" is stronger
+than in CPS-OUT: they have *no* subexpressions.
+
+Here's a sketch of the grammar of ANF-OUT:
+
+Simple-exp ::= (const-exp (num : Number))
+
+           ::= (var-exp (var : Identifier))
+
+Anf-exp    ::= (simple-exp->exp (simple : Simple-exp))
+
+           ::= (anf-diff-exp (s1, s2 : Simple-exp))
+
+           ::= (anf-zero?-exp (s1 : Simple-exp))
+
+           ::= (anf-proc-exp (vars : List-of(Identifier)
+                              body : Anf-exp))
+
+           ::= (anf-let-exp (var : Identifier
+                             rhs : Anf-exp    % ???
+                             body: Anf-exp))
+
+           ::= (anf-letrec-exp
+                 (p-names  : List-of(Identifier)
+                  b-varss  : List-of(List-of(Identifier))
+                  p-bodies : List-of(Anf-exp)
+                  lr-body  : Anf-exp))
+
+           ::= (anf-if-exp (s1, s2, s3 : Simple-exp))
+
+           ::= (anf-call-exp (rator : Simple-exp
+                              rands : List-of(Simple-exp)))
+
+Should the values that can be bound by a let be further
+restricted to avoid nested lets?  Probably.  It's easy
+enough to add another non-terminal to the grammar which
+includes only let-exp.  Should letrec be restricted in some
+way, too?  More to think about.
+
+Anyway, the translation.
+
+Constant and variable expressions require no translation:
+
+(anf-of-exp (const-exp n)) = (const-exp n)
+
+(anf-of-exp (var-exp v)) = (var-exp v)
+
+Basic compound expressions:
+
+(anf-of-exp (zero?-exp exp1)) =
+  (anf-of-exp/ctx
+   exp1
+   (lambda (s1)
+     (anf-zero?-exp s1))))
+
+(anf-of-exp (diff-exp exp1 exp2)) =
+  (anf-of-exp/ctx
+   exp1
+   (lambda (s1)
+     (anf-of-exp/ctx
+      exp2
+      (lambda (s2)
+        (anf-diff-exp s1 s2))))))
+
+The anf-of-exp/ctx procedure takes an Inp-exp, transforms it to
+ANF, and returns a variable which will be bound to its value (or
+a const-exp).  For example:
+
+(anf-of-exp (zero?-exp (diff-exp (const-exp 3) (const-exp 1)))) =
+
+(let ((var41 (anf-diff-exp (const-exp 3) (const-exp 1))))
+  (anf-zero?-exp var41))
+
+Hopefully it's possible to get output this concise from the
+translator.
