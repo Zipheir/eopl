@@ -241,3 +241,14 @@ Application follows similar rules.  Both the operator and operands
 can be simple or non-simple; if any are non-simple, then evaluation
 is unnested and variable expressions replace the non-simple
 subexpressions.
+
+> When we convert a program to CPS, we do more than produce a
+> program in which the control contexts become explicit.  We
+> also choose the exact order in which the operations are done,
+> and choose names for each intermediate result.
+
+(p. 226)
+
+Fixing the order of operations is called *sequentialization*.
+A way to sequentialize a program without changing control
+behavior is to translate it to A-normal form.
