@@ -71,6 +71,16 @@
 
     (cps-of-rest exps '())))
 
+;; cps-of-exp/ctx : Inp-exp x (Simple-exp -> Tf-exp) -> Tf-exp
+(define (cps-of-exp/ctx exp context)
+  (if (inp-exp-simple? exp)
+      (context (cps-of-simple-exp exp))
+      (let ((var (fresh-identifier 'var)))
+        (cps-of-exp
+         exp
+         `(cps-proc-exp (,var)
+                        ,(context `(cps-var-exp ,var)))))))
+
 ;; inp-exp-simple? : Inp-exp -> Bool
 (define (inp-exp-simple? exp)
   (pmatch exp
@@ -166,11 +176,12 @@
 
 ;; cps-of-diff-exp : Inp-exp x Inp-exp x Simple-exp -> Tf-exp
 (define (cps-of-diff-exp exp1 exp2 k-exp)
-  (cps-of-exps
-   (list exp1 exp2)
-   (lambda (sms)
-     (pmatch sms
-       ((,s1 ,s2)
+  (cps-of-exp/ctx
+   exp1
+   (lambda (s1)
+     (cps-of-exp/ctx
+      exp2
+      (lambda (s2)
         (make-send-to-cont k-exp `(cps-diff-exp ,s1 ,s2)))))))
 
 ;; cps-of-if-exp : Inp-exp x Inp-exp x Inp-exp x Simple-exp -> Tf-exp
@@ -179,14 +190,14 @@
       `(cps-if-exp ,(cps-of-simple-exp exp1)
                    ,(cps-of-exp exp2 k-exp)
                    ,(cps-of-exp exp3 k-exp))
-      (cps-of-exps
-       (list exp1)
-       (lambda (sms)
+      (cps-of-exp/ctx
+       exp1
+       (lambda (s1)
          (let ((k (fresh-identifier 'k)))
            `(cps-let-exp
              (,k)
              (,k-exp)
-             (cps-if-exp ,(car sms)
+             (cps-if-exp ,s1
                          ,(cps-of-exp exp2 `(cps-var-exp ,k))
                          ,(cps-of-exp exp3 `(cps-var-exp ,k)))))))))
 
@@ -238,19 +249,23 @@
 
 ;; cps-of-call-exp : Inp-exp x List-of(Inp-exp) x Simple-exp -> Tf-exp
 (define (cps-of-call-exp rator rands k-exp)
-  (cps-of-exps
-   (cons rator rands)
-   (lambda (sms)
-     `(cps-call-exp ,(car sms)
-     		    ,(append (cdr sms) (list k-exp))))))
+  (cps-of-exp/ctx
+   rator
+   (lambda (srat)
+     (cps-of-exps
+      rands
+      (lambda (sms)
+        `(cps-call-exp ,srat
+                       ,(append sms (list k-exp))))))))
 
 ;; cps-of-cons-exp : Inp-exp x Inp-exp x Simple-exp -> Tf-exp
 (define (cps-of-cons-exp exp1 exp2 k-exp)
-  (cps-of-exps
-   (list exp1 exp2)
-   (lambda (sms)
-     (pmatch sms
-       ((,s1 ,s2)
+  (cps-of-exp/ctx
+   exp1
+   (lambda (s1)
+     (cps-of-exp/ctx
+      exp2
+      (lambda (s2)
         (make-send-to-cont k-exp
                            `(cps-cons-exp ,s1 ,s2)))))))
 
@@ -258,11 +273,11 @@
 ;;
 ;; Translate a unary form.
 (define (cps-of-unary out-form exp1 k-exp)
-  (cps-of-exps
-   (list exp1)
-   (lambda (sms)
+  (cps-of-exp/ctx
+   exp1
+   (lambda (s1)
      (make-send-to-cont k-exp
-                        (list out-form (car sms))))))
+                        (list out-form s1)))))
 
 ;; cps-of-list-exp : List-of(Inp-exp) x Simple-exp -> Tf-exp
 (define (cps-of-list-exp exps k-exp)
@@ -306,9 +321,9 @@
   (pmatch pgm
     ((program ,exp1)
      `(cps-program
-       ,(cps-of-exps (list exp1)
-                     (lambda (new)
-                       `(simple-exp->exp ,(car new))))))))
+       ,(cps-of-exp/ctx exp1
+                        (lambda (new)
+                          `(simple-exp->exp ,new)))))))
 
 ;;; Parser
 
