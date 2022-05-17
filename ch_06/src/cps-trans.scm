@@ -34,17 +34,6 @@
          (cons y xs*)
          (cons x (list-set xs* (- k 1) y))))))
 
-;;; Simple gensyms
-
-(define fresh-identifier
-  (let ((name-counter 0))
-    (lambda (prefix)
-      (let ((res (string->symbol
-                  (string-append (symbol->string prefix)
-           	                 (number->string name-counter)))))
-        (set! name-counter (+ name-counter 1))
-        res))))
-
 ;; cps-of-exps : List-of(Inp-exp) x (List-of(Inp-exp) -> Tf-exp) ->
 ;;		   Tf-exp
 (define (cps-of-exps exps builder)
@@ -60,7 +49,7 @@
 
     (make-bind
      (lambda (exp rest-exps acc)
-       (let ((var (fresh-identifier 'var)))
+       (let ((var (gensym "var")))
          (cps-of-exp exp
                      `(cps-proc-exp
                        (,var)
@@ -75,7 +64,7 @@
 (define (cps-of-exp/ctx exp context)
   (if (inp-exp-simple? exp)
       (context (cps-of-simple-exp exp))
-      (let ((var (fresh-identifier 'var)))
+      (let ((var (gensym "var")))
         (cps-of-exp
          exp
          `(cps-proc-exp (,var)
@@ -193,7 +182,7 @@
       (cps-of-exp/ctx
        exp1
        (lambda (s1)
-         (let ((k (fresh-identifier 'k)))
+         (let ((k (gensym "k")))
            `(cps-let-exp
              (,k)
              (,k-exp)
