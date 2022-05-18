@@ -275,6 +275,26 @@
    (lambda (sms)
      (make-send-to-cont k-exp `(cps-list-exp ,sms)))))
 
+;; cps-of-letcc-exp : Sym x Inp-exp x Simple-exp -> Tf-exp
+(define (cps-of-letcc-exp var body k-exp)
+  (display "k-exp: ")
+  (display k-exp)
+  (newline)
+  `(cps-let-exp
+    (,var)
+    (,k-exp)
+    ,(cps-of-exp body `(cps-var-exp ,var))))
+
+;; cps-of-throw-exp : Inp-exp x Inp-exp x Simple-exp -> Tf-exp
+(define (cps-of-throw-exp exp1 cont k-exp)
+  (cps-of-exp/ctx
+   exp1
+   (lambda (sx)
+     (cps-of-exp/ctx
+      cont
+      (lambda (sk)
+        (make-send-to-cont sk sx))))))
+
 ;;; Main translator dispatch
 
 ;; cps-of-exp : Inp-exp x Simple-exp -> Tf-exp
@@ -303,6 +323,8 @@
     ((cdr-exp ,exp1) (cps-of-unary 'cps-cdr-exp exp1 k-exp))
     ((null?-exp ,exp1) (cps-of-unary 'cps-null?-exp exp1 k-exp))
     ((list-exp ,exps) (cps-of-list-exp exps k-exp))
+    ((letcc-exp ,var ,body) (cps-of-letcc-exp var body k-exp))
+    ((throw-exp ,exp1 ,cont) (cps-of-throw-exp exp1 cont k-exp))
     (? (error 'cps-of-exp "invalid expression" exp))))
 
 ;; cps-of-program : Inp-program -> Tf-program
@@ -336,6 +358,10 @@
     ((cdr ,e) `(cdr-exp ,(parse e)))
     ((null? ,e) `(null?-exp ,(parse e)))
     ((list . ,es) `(list-exp ,(map parse es)))
+    ((letcc ,v in ,b) (guard (symbol? v))
+     `(letcc-exp ,v ,(parse b)))
+    ((throw ,e1 to ,e2)
+     `(throw-exp ,(parse e1) ,(parse e2)))
     ((,e1 . ,es) `(call-exp ,(parse e1) ,(map parse es)))
     (? (error 'parse "invalid syntax" sexp))))
 
