@@ -285,8 +285,8 @@
     (,k-exp)
     ,(cps-of-exp body `(cps-var-exp ,var))))
 
-;; cps-of-throw-exp : Inp-exp x Inp-exp x Simple-exp -> Tf-exp
-(define (cps-of-throw-exp exp1 cont k-exp)
+;; cps-of-throw-exp : Inp-exp x Inp-exp -> Tf-exp
+(define (cps-of-throw-exp exp1 cont)
   (cps-of-exp/ctx
    exp1
    (lambda (sx)
@@ -324,7 +324,7 @@
     ((null?-exp ,exp1) (cps-of-unary 'cps-null?-exp exp1 k-exp))
     ((list-exp ,exps) (cps-of-list-exp exps k-exp))
     ((letcc-exp ,var ,body) (cps-of-letcc-exp var body k-exp))
-    ((throw-exp ,exp1 ,cont) (cps-of-throw-exp exp1 cont k-exp))
+    ((throw-exp ,exp1 ,cont) (cps-of-throw-exp exp1 cont))
     (? (error 'cps-of-exp "invalid expression" exp))))
 
 ;; cps-of-program : Inp-program -> Tf-program
