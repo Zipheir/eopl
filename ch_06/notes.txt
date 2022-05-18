@@ -252,3 +252,41 @@ subexpressions.
 Fixing the order of operations is called *sequentialization*.
 A way to sequentialize a program without changing control
 behavior is to translate it to A-normal form.
+
+## 6.4 Modeling effects
+
+CPS can be used as a model in which effects are explicit.
+
+If we add a print expression in the CPS-IN language,
+
+Inp-exp ::= print (Inp-exp)
+
+it could be translated to a printk expression in CPS-OUT:
+
+Tf-exp ::= printk (Simple-exp) ; Tf-exp
+
+The semantics of (printk (simple body)) are that the value of
+*simple* is printed, then control passes to the *body*.  If the
+'print' expression of CPS-IN returns an arbitrary value, e.g.
+(num-val 37), then (print 10) would be translated to
+
+printk 10 ; 37
+
+This kind of thing is very familiar as the "I/O monad" of other
+languages.  Other effects like explicit reference allocation and
+mutation follow the same pattern.
+
+What about control-flow manipulation?  'letcc' and 'throw'
+expressions are never simple (in the sense of CPS-OUT).  While
+the body of a 'letcc' expression is in tail-position, both
+subexpressions of a 'throw' expression are in operand position:
+
+letcc Var in T
+throw O to O
+
+The book gives a quick sketch of the translation semantics:
+
+(cps-of-exp <letcc var in body> K) =
+  <let var = K in (cps-of-exp body var)>
+
+(cps-of-exp <throw s1 to s2> K) = (s2 s1)
