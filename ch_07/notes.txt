@@ -1,0 +1,43 @@
+# Chapter 7: Types
+
+## 7.1
+
+This chapter sticks to a language similar to LETREC from Ch. 3.
+
+The first goal is to write a type checker.  This will be a procedure
+that analyzes a program and accepts it if and only if it is type-safe,
+and rejects it otherwise.  (So this is a checker, not an inferrer: it
+produces a yes-or-no answer, not a collection of type assignments.)
+
+The type grammar for LETREC:
+
+Type ::= int
+         [int-type ()]
+     ::= bool
+         [bool-type ()]
+     ::= (Type -> Type)
+         [proc-type (arg-type result-type)]
+
+First, types of values (*not* expressions!  Does this distinction
+make sense here?).
+
+### Def. 7.1.1 "value v is of type t"
+
+This is defined by induction on t:
+
+* An expressed value is of type 'int' iff it is a 'num-val'.
+
+* An expressed value is of type 'bool' iff it is a 'bool-val'.
+
+* It is of type (t₁ -> t₂) iff it is a 'proc-val' with the property
+  that if it is applied to an argument of type t₁, then one of the
+  following occurs:
+
+  1. It returns a value of type t₂
+
+  2. It fails to terminate
+
+  3. It fails with an error that is not a type error.
+
+Among other things, this definition allows values to be of more than
+one type.  (e.g. proc (x) x is of type (t -> t) for all types t.)
