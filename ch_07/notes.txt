@@ -41,3 +41,100 @@ This is defined by induction on t:
 
 Among other things, this definition allows values to be of more than
 one type.  (e.g. proc (x) x is of type (t -> t) for all types t.)
+
+## 7.2
+
+This section develops the type-of procedure which assigns a type to
+an expression given a *type environment*.  This is a structure mapping
+each variable *exp* to a type *t*.  The informal spec.:
+
+> Whenever *exp* is evaluated in an environment in which each
+> variable has a value of the type specified by *tenv*, one of
+> the following happens:
+>
+> * The resulting value has type *t*,
+>
+> * the evaluation does not terminate, or
+>
+> * the evaluation fails on an error other than a type error.
+
+The typing rules expressed by type-of:
+
+------------------------------------
+ (type-of (const-exp _) tenv) = int
+
+
+------------------------------------------
+ (type-of (var-exp var) tenv) = tenv(var)
+
+
+        (type-of exp₁ tenv) = int
+------------------------------------------
+ (type-of (zero?-exp exp₁) tenv) = bool
+
+
+ (type-of exp₁ tenv) = int   (type-of exp₂ tenv) = int
+-------------------------------------------------------
+      (type-of (diff-exp exp₁ exp₂) tenv) = int
+
+
+ (type-of exp₁ tenv) = t₁   (type-of body [var=t₁]tenv) = t₂
+-------------------------------------------------------------
+        (type-of (let-exp var exp₁ body) tenv) = t₂
+
+
+           (type-of exp₁ tenv) = bool
+           (type-of exp₂ tenv) = t
+           (type-of exp₃ tenv) = t
+--------------------------------------------
+ (type-of (if-exp exp₁ exp₂ exp₃) tenv) = t
+
+
+ (type-of rator tenv) = (t₁ -> t₂)  (type-of rand tenv) = t₁
+-------------------------------------------------------------
+        (type-of (call-exp rator rand) tenv) = t₂
+
+
+No surprises here.  However, there is a problem with the procedure
+rule:
+
+        (type-of body [var=t₁]tenv) = t₂
+-------------------------------------------------
+ (type-of (proc-exp var body) tenv) = (t₁ -> t₂)
+
+How do we determine t₁?  Either require a type annotation, or
+use an inference algorithm that can handle this situation (e.g.
+bidirectional typing).
+
+## 7.3 CHECKED
+
+This is a type-checked version of LETREC in which every bound
+variable and every recursive procedure must have a type annotation.
+
+The grammar is the same as for LETREC, except for the productions
+for 'proc' and 'letrec':
+
+Expression ::= proc (Identifier : Type) Expression
+               [proc-exp (var ty body)]
+
+           ::= letrec Type Id. (Id. : Type) = Expression
+                 in Expression
+               [letrec-exp (p-result-type p-name b-var b-var-type
+                            p-body lr-body)]
+
+Here, the 'proc-exp' typing rule is
+
+          (type-of body [var=t_var]tenv) = t_res
+-------------------------------------------------------------
+ (type-of (proc-exp var t_var body) tenv) = (t_var -> t_res)
+
+The 'letrec-exp' rule is the most complex, but basically just follows
+the scope rules of the language:
+
+(type-of e_proc-body [var = t_var, p = (t_var -> t_res)]tenv) = t_res
+       (type-of e_letrec-body [p = (t_var -> t_res)]tenv) = t
+-----------------------------------------------------------------------
+(type-of (letrec-exp t_res p var t_var e_proc-body e_letrec-body) tenv)
+  = t
+
+See src/checked.scm for the implementation.
