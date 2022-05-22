@@ -161,7 +161,8 @@
      (let ((res-type (type-of body (extend-tenv var var-type tenv))))
        `(proc-type ,var-type ,res-type)))
     ((call-exp ,rator ,rand) (type-of-call-exp rator rand tenv))
-    ((letrec-exp . ,rest) (apply type-of-letrec-exp rest))
+    ((letrec-exp . ,rest)
+     (apply type-of-letrec-exp (append rest (list tenv))))
     (? (error 'type-of "invalid expression" exp))))
 
 ;; type-of-call-exp : Exp x Exp x Tenv -> Type
@@ -176,14 +177,14 @@
 ;; type-of-letrec-exp : Type x Var x Var x Type x Exp x Exp x
 ;;                        Tenv -> Type
 (define (type-of-letrec-exp p-res-type p-name b-var b-var-type p-body
-                            lr-body)
+                            lr-body tenv)
   (let* ((p-type `(proc-type ,b-var-type ,p-res-type))
          (lr-body-tenv (extend-tenv p-name p-type tenv))
          (p-body-type
           (type-of p-body
                    (extend-tenv b-var b-var-type lr-body-tenv))))
     (check-equal-type p-body-type p-res-type p-body)
-    (type-of lr-body lr-body-type)))
+    (type-of lr-body lr-body-tenv)))
 
 ;;; Interpreter
 
