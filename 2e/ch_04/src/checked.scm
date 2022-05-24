@@ -2,10 +2,21 @@
 
 (import (rnrs base (6))
         (rnrs exceptions (6))
+        (rnrs records syntactic (6))
         (rename (rnrs lists (6)) (for-all every)))
 
-(include "../../src/pmatch.scm")
-(include "../../src/test.scm")
+(include "../../../src/pmatch.scm")
+(include "../../../src/test.scm")
+
+;;;; Utility
+
+(define (unzip ps)
+  (if (null? ps)
+      (list '() '())
+      (pmatch (unzip (cdr ps))
+        ((,as ,bs)
+	 (list (cons (caar ps) as)
+	       (cons (cadar ps) bs))))))
 
 ;;;; Expressed values
 
@@ -37,12 +48,6 @@
 (define (procedure b-var body saved-env)
   (list 'proc b-var body saved-env))
 
-;; apply-procedure : Proc x Val -> Final-answer
-(define (apply-procedure proc1 val)
-  (pmatch proc1
-    ((proc ,var ,body ,env)
-     (value-of body (extend-env var val env)))))
-
 ;;;; Environments
 
 ;; empty-env : () -> Env
@@ -65,7 +70,7 @@
          val
          (apply-env env* search-var)))
     (((ext-rec ,p-name ,b-var ,p-body) . ,env*)
-     (if (eqv? search-var var)
+     (if (eqv? search-var p-name)
          (list 'proc-val (procedure b-var p-body env))
          (apply-env env* search-var)))
     (? (error 'apply-env "invalid environment" env))))
@@ -98,8 +103,8 @@
 (define (extend-tenv var type tenv)
   (cons (cons var type) tenv))
 
-(define (extend-tenv* alist tenv)
-  (append alist tenv))
+(define (extend-tenv* vars types tenv)
+  (append (map cons vars types) tenv))
 
 (define (apply-tenv tenv var)
   (cond ((assv var tenv) => cdr)
@@ -157,32 +162,40 @@
     ((let-exp ,var ,exp1 ,body)
      (let ((ty1 (type-of exp1 tenv)))
        (type-of body (extend-tenv var ty1 tenv))))
-    ((proc-exp ,var ,var-type ,body)
-     (let ((res-type (type-of body (extend-tenv var var-type tenv))))
-       `(proc-type ,var-type ,res-type)))
-    ((call-exp ,rator ,rand) (type-of-call-exp rator rand exp tenv))
+    ((proc-exp ,var-types ,vars ,body)
+     `(proc-type ,var-types
+                 ,(type-of body
+                           (extend-tenv* vars var-types tenv))))
+    ((call-exp ,rator ,rands)
+     (type-of-call-exp rator rands exp tenv))
     ((letrec-exp . ,rest)
      (apply type-of-letrec-exp (append rest (list tenv))))
     (? (error 'type-of "invalid expression" exp))))
 
-;; type-of-call-exp : Exp x Exp x Exp x Tenv -> Type
-(define (type-of-call-exp rator rand orig-exp tenv)
-  (let ((rator-type (type-of rator tenv)))
+;; type-of-call-exp : Exp x List-of(Exp) x Exp x Tenv -> Type
+(define (type-of-call-exp rator rands orig-exp tenv)
+  (let ((rator-type (type-of rator tenv))
+        (rand-types (map (lambda (e) (type-of e tenv)) rands)))
     (pmatch rator-type
-      ((proc-type ,t-op ,t-res)
-       (check-equal-type t-op (type-of rand tenv) rand)
+      ((proc-type ,t-ids ,t-res)
+       (unless (= (length t-ids) (length rands))
+         (error 'type-of "too many/few arguments" orig-exp))
+       (for-each (lambda (t1 t2)
+                   (check-equal-type t1 t2 orig-exp))
+                 t-ids
+                 rand-types)
        t-res)
       (? (raise (make-type-cond rator-type 'proc-type orig-exp))))))
 
 ;; type-of-letrec-exp : Type x Var x Var x Type x Exp x Exp x
 ;;                        Tenv -> Type
-(define (type-of-letrec-exp p-res-type p-name b-var b-var-type p-body
+(define (type-of-letrec-exp p-res-type p-name b-vars b-var-types p-body
                             lr-body tenv)
-  (let* ((p-type `(proc-type ,b-var-type ,p-res-type))
+  (let* ((p-type `(proc-type ,b-var-types ,p-res-type))
          (lr-body-tenv (extend-tenv p-name p-type tenv))
          (p-body-type
           (type-of p-body
-                   (extend-tenv b-var b-var-type lr-body-tenv))))
+                   (extend-tenv* b-vars b-var-types lr-body-tenv))))
     (type-of lr-body lr-body-tenv)))
 
 ;;; Interpreter
@@ -209,13 +222,11 @@
      `(if-exp ,(parse e1) ,(parse e2) ,(parse e3)))
     ((let ,v = ,e in ,b) (guard (symbol? v))
      `(let-exp ,v ,(parse e) ,(parse b)))
-    ((proc (,v : ,t) ,e) (guard (symbol? v))
-     `(proc-exp ,v ,(parse-type t) ,(parse e)))
-    ((letrec ,rt ,nm (,v : ,vt) = ,e in ,b)
-     (guard (symbol? nm) (symbol? v))
-     `(letrec-exp ,(parse-type rt) ,nm ,v ,(parse-type vt) ,(parse e)
-                  ,(parse b)))
-    ((,e1 ,e2) `(call-exp ,(parse e1) ,(parse e2)))
+    ((proc ,args ,e) (parse-proc-exp args e))
+    ((letrec ,rt ,nm ,args = ,e in ,b)
+     (guard (symbol? nm))
+     (parse-letrec-exp rt nm args e b))
+    ((,e1 . ,es) `(call-exp ,(parse e1) ,(map parse es)))
     (? (error 'parse "syntax error" sexp))))
 
 ;; parse-type : S-exp -> Type
@@ -223,8 +234,31 @@
   (pmatch sexp
     (int 'int-type)
     (bool 'bool-type)
-    ((,t1 -> ,t2) `(proc-type ,(parse-type t1) ,(parse-type t2)))
+    ((-> ,arg-ts ,res-t) (guard (pair? arg-ts))
+     `(proc-type ,(map parse-type arg-ts) ,(parse-type res-t)))
     (? (error 'parse-type "invalid type syntax" sexp))))
+
+(define (parse-letrec-exp res-texp name args p-body lr-body)
+  (pmatch (parse-args args)
+    ((,ids . ,id-ts)
+     (list 'letrec-exp (parse-type res-texp)
+                       name
+                       ids
+                       id-ts
+                       (parse p-body)
+                       (parse lr-body)))))
+
+;; parse-args : List -> (List-of(Sym) x List-of(Type))
+(define (parse-args args+types)
+  (pmatch (unzip args+types)
+    ((,ids ,ts) (guard (every symbol? ids))
+     (cons ids (map parse-type ts)))))
+
+;; parse-proc-exp : List x List -> Exp
+(define (parse-proc-exp args body)
+  (pmatch (parse-args args)
+    ((,ids . ,ts)
+     `(proc-exp ,ts ,ids ,(parse body)))))
 
 ;; Convenience driver
 (define (check sexp)
@@ -245,37 +279,38 @@
   (test 'int-type (check '(if (zero? 3) 1 0)))
   (test 'int-type (check '(let x = 4 in x)))
   (test 'bool-type (check '(let z = (zero? 3) in z)))
-  (test '(proc-type int-type int-type) (check '(proc (x : int) 0)))
-  (test '(proc-type int-type int-type)
-         (check '(let f = (proc (x : int) (- x (- 0 1)))
-                  in (proc (y : int) (- (f y) 4)))))
-  (test '(proc-type int-type bool-type)
-        (check '(proc (x : int) (zero? x))))
-  (test '(proc-type (proc-type int-type int-type)
-                    (proc-type int-type bool-type))
-        (check '(proc (f : (int -> int))
-                  (proc (x : int)
+  (test '(proc-type (int-type) int-type)
+        (check '(proc ((x int)) 0)))
+  (test '(proc-type (int-type) int-type)
+         (check '(let f = (proc ((x int)) (- x (- 0 1)))
+                  in (proc ((y int)) (- (f y) 4)))))
+  (test '(proc-type (int-type) bool-type)
+        (check '(proc ((x int)) (zero? x))))
+  (test '(proc-type ((proc-type (int-type) int-type))
+                    (proc-type (int-type) bool-type))
+        (check '(proc ((f (-> (int) int)))
+                  (proc ((x int))
                     (zero? (f x))))))
-  (test '(proc-type int-type int-type)
-        (check '(letrec int f (x : int) = x in f)))
+  (test '(proc-type (int-type) int-type)
+        (check '(letrec int f ((x int)) = x in f)))
   (test 'bool-type
-        (check '(letrec bool g (x : int) = (zero? (- x 1))
+        (check '(letrec bool g ((x int)) = (zero? (- x 1))
                  in (g 10))))
   (test 'int-type
-        (check '((proc (x : int)
-                   ((proc (y : int) (- x y)) (- x 2)))
+        (check '((proc ((x int))
+                   ((proc ((y int)) (- x y)) (- x 2)))
                  4)))
 
   (test #t (rejected? '(- (zero? 3) 2)))
-  (test #t (rejected? '(- 3 (proc (x : int) x))))
+  (test #t (rejected? '(- 3 (proc ((x int)) x))))
   (test #t (rejected? '(zero? (zero? 0))))
   (test #t (rejected? '(if 3 1 0)))
   (test #t (rejected? '(if (zero? 3) (zero? 1) 4)))
-  (test #t (rejected? '(if (zero? 0) 3 ((proc (x : int) (zero? x)) 4))))
+  (test #t (rejected? '(if (zero? 0) 3 ((proc ((x int)) (zero? x)) 4))))
   (test #t (rejected? '(let x = 4 in (if x 0 1))))
-  (test #t (rejected? '((proc (f : (int -> int)) (f 10))
-                        (proc (x : int) (zero? x)))))
-  (test #t (rejected? '(letrec int f (x : bool) = (f (f x)) in 4)))
+  (test #t (rejected? '((proc ((f (-> (int) int))) (f 10))
+                        (proc ((x int)) (zero? x)))))
+  (test #t (rejected? '(letrec int f ((x bool)) = (f (f x)) in 4)))
   (test #t (rejected? '(4 4)))
-  (test #t (rejected? '(((proc (x : int) x) 10) 3)))
+  (test #t (rejected? '(((proc ((x int)) x) 10) 3)))
   )
