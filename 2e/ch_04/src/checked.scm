@@ -161,9 +161,9 @@
            (ty2 (type-of exp3 tenv)))
        (check-equal-type ty1 ty2 exp)
        ty2))
-    ((let-exp ,var ,exp1 ,body)
-     (let ((ty1 (type-of exp1 tenv)))
-       (type-of body (extend-tenv var ty1 tenv))))
+    ((let-exp ,vars ,exps ,body)
+     (let ((types (map (lambda (e) (type-of e tenv)) exps)))
+       (type-of body (extend-tenv* vars types tenv))))
     ((proc-exp ,var-types ,vars ,body)
      `(proc-type ,var-types
                  ,(type-of body
@@ -224,8 +224,7 @@
     ((zero? ,e) `(zero?-exp ,(parse e)))
     ((if ,e1 ,e2 ,e3)
      `(if-exp ,(parse e1) ,(parse e2) ,(parse e3)))
-    ((let ,v = ,e in ,b) (guard (symbol? v))
-     `(let-exp ,v ,(parse e) ,(parse b)))
+    ((let ,binds in ,b) (parse-let-exp binds b))
     ((proc ,args ,e) (parse-proc-exp args e))
     ((letrec ,rt ,nm ,args = ,e in ,b)
      (guard (symbol? nm))
@@ -241,6 +240,20 @@
     ((-> ,arg-ts ,res-t) (guard (pair? arg-ts))
      `(proc-type ,(map parse-type arg-ts) ,(parse-type res-t)))
     (? (error 'parse-type "invalid type syntax" sexp))))
+
+;; parse-let-exp : List-of(S-exp x Sym) x S-exp -> Exp
+(define (parse-let-exp binds body)
+  (letrec
+   ((collect
+     (lambda (bs ids exps)
+       (pmatch bs
+         (() (values ids exps))
+         (((,v = ,e) . ,bs*) (guard (symbol? v))
+          (collect bs* (cons v ids) (cons (parse e) exps)))
+         (? (error 'parse "syntax error" bs))))))
+
+    (let-values (((ids exps) (collect binds '() '())))
+      `(let-exp ,ids ,exps ,(parse body)))))
 
 (define (parse-letrec-exp res-texp name args p-body lr-body)
   (pmatch (parse-args args)
@@ -283,12 +296,12 @@
   (test 'bool-type (check '(zero? 4)))
   (test 'int-type (check '(- 4 1)))
   (test 'int-type (check '(if (zero? 3) 1 0)))
-  (test 'int-type (check '(let x = 4 in x)))
-  (test 'bool-type (check '(let z = (zero? 3) in z)))
+  (test 'int-type (check '(let ((x = 4)) in x)))
+  (test 'bool-type (check '(let ((z = (zero? 3))) in z)))
   (test '(proc-type (int-type) int-type)
         (check '(proc ((x int)) 0)))
   (test '(proc-type (int-type) int-type)
-         (check '(let f = (proc ((x int)) (- x (- 0 1)))
+         (check '(let ((f = (proc ((x int)) (- x (- 0 1)))))
                   in (proc ((y int)) (- (f y) 4)))))
   (test '(proc-type (int-type) bool-type)
         (check '(proc ((x int)) (zero? x))))
@@ -306,6 +319,10 @@
         (check '((proc ((x int))
                    ((proc ((y int)) (- x y)) (- x 2)))
                  4)))
+  (test 'int-type
+        (check '(let ((x = 10) (y = 11)) in (- y x))))
+  (test 'int-type
+        (check '(let ((b = true) (x = 4)) in (if b x 0))))
 
   (test #t (rejected? '(- (zero? 3) 2)))
   (test #t (rejected? '(- 3 (proc ((x int)) x))))
@@ -313,10 +330,11 @@
   (test #t (rejected? '(if 3 1 0)))
   (test #t (rejected? '(if (zero? 3) (zero? 1) 4)))
   (test #t (rejected? '(if (zero? 0) 3 ((proc ((x int)) (zero? x)) 4))))
-  (test #t (rejected? '(let x = 4 in (if x 0 1))))
+  (test #t (rejected? '(let ((x = 4)) in (if x 0 1))))
   (test #t (rejected? '((proc ((f (-> (int) int))) (f 10))
                         (proc ((x int)) (zero? x)))))
   (test #t (rejected? '(letrec int f ((x bool)) = (f (f x)) in 4)))
   (test #t (rejected? '(4 4)))
   (test #t (rejected? '(((proc ((x int)) x) 10) 3)))
+  (test #t (rejected? '(let ((b = false) (x = 5)) in (if x b true))))
   )
