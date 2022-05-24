@@ -144,6 +144,8 @@
 ;; type-of : Exp x Tenv -> Type
 (define (type-of exp tenv)
   (pmatch exp
+    (true-exp 'bool-type)
+    (false-exp 'bool-type)
     ((const-exp ?) 'int-type)
     ((var-exp ,v) (apply-tenv tenv v))
     ((diff-exp ,exp1 ,exp2)
@@ -214,6 +216,8 @@
 (define (parse sexp)
   (pmatch sexp
     (,n (guard (natural? n)) `(const-exp ,n))
+    (true 'true-exp)
+    (false 'false-exp)
     (,v (guard (symbol? v)) `(var-exp ,v))
     ((- ,e1 ,e2)
      `(diff-exp ,(parse e1) ,(parse e2)))
@@ -273,6 +277,8 @@
              (else (raise con)))
       (check sexp)))
 
+  (test 'bool-type (check 'true))
+  (test 'bool-type (check 'false))
   (test 'int-type (check 4))
   (test 'bool-type (check '(zero? 4)))
   (test 'int-type (check '(- 4 1)))
