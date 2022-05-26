@@ -140,11 +140,13 @@
     (void-type 'void)
     ((pair-type ,type1 ,type2)
      `(pair-of ,(type-to-external-form type1)
-               ,(type-to-external-form type1)))
-    ((proc-type ,arg-type ,res-type)
-     `(,(type-to-external-form arg-type)
+               ,(type-to-external-form type2)))
+    ((proc-type ,arg-types ,res-type)
+     `(,(map type-to-external-form arg-types)
        ->
-       ,(type-to-external-form res-type)))))
+       ,(type-to-external-form res-type)))
+    ((list-type ,type)
+     `(list-of ,(type-to-external-form type)))))
 
 ;; type-of-program : Program -> Type
 (define (type-of-program pgm)
@@ -320,6 +322,8 @@
     (void 'void-type)
     ((-> ,arg-ts ,res-t) (guard (pair? arg-ts))
      `(proc-type ,(map parse-type arg-ts) ,(parse-type res-t)))
+    ((pair-of ,t1 ,t2)
+     `(pair-type ,(parse-type t1) ,(parse-type t2)))
     ((list-of ,texp) `(list-type ,(parse-type texp)))
     (? (error 'parse-type "invalid type syntax" sexp))))
 
