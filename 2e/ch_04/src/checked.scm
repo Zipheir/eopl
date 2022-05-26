@@ -125,6 +125,13 @@
   (unless (equal? ty1 ty2)
     (raise (make-type-cond ty1 ty2 exp))))
 
+;; check-all-same : Non-empty-list-of(Type) x Exp -> ()
+(define (check-all-same types orig-exp)
+  (pmatch types
+    ((,ty1 . ,tys)
+     (for-each (lambda (t) (check-equal-type ty1 t orig-exp))
+               tys))))
+
 ;; type-to-external-form : Type -> List
 (define (type-to-external-form ty)
   (pmatch ty
@@ -152,6 +159,7 @@
     (false-exp 'bool-type)
     ((const-exp ?) 'int-type)
     ((var-exp ,v) (apply-tenv tenv v))
+    ((emptylist-exp ,type) (list 'list-type type))
     ((diff-exp ,exp1 ,exp2)
      (check-equal-type (type-of exp1 tenv) 'int-type exp1)
      (check-equal-type (type-of exp2 tenv) 'int-type exp2)
@@ -193,6 +201,27 @@
                                (list ty1 ty2)
                                tenv)))
        (,type (raise (make-type-cond '(pair * *) type exp1)))))
+    ((list-exp ,exps)  ; exps is guaranteed non-empty
+     (let* ((types (map (lambda (e) (type-of e tenv)) exps)))
+       (check-all-same types exp)
+       (list 'list-type (car types))))
+    ((cons-exp ,exp1 ,exp2)
+     (let ((ty1 (type-of exp1 tenv))
+           (ty2 (type-of exp2 tenv)))
+       (check-equal-type `(list-type ,ty1) ty2 exp)
+       ty2))
+    ((null?-exp ,exp1)
+     (pmatch (type-of exp1 tenv)
+       ((list-type ?) 'bool-type)
+       (,type (raise (make-type-cond '(list-type *) type exp1)))))
+    ((car-exp ,exp1)
+     (pmatch (type-of exp1 tenv)
+       ((list-type ,t) t)
+       (,type (raise (make-type-cond '(list-type *) type exp1)))))
+    ((cdr-exp ,exp1)
+     (pmatch (type-of exp1 tenv)
+       ((list-type ,t) `(list-type ,t))
+       (,type (raise (make-type-cond '(list-type *) type exp1)))))
     (? (error 'type-of "invalid expression" exp))))
 
 ;; type-of-call-exp : Exp x List-of(Exp) x Exp x Tenv -> Type
@@ -273,6 +302,13 @@
     ((unpack ,v1 ,v2 = ,e in ,b)
      (guard (symbol? v1) (symbol? v2))
      (list 'unpack-exp v1 v2 (parse e) (parse b)))
+    ((emptylist of ,t) `(emptylist-exp ,(parse-type t)))
+    ((cons ,a ,d) `(cons-exp ,(parse a) ,(parse d)))
+    ((car ,e) `(car-exp ,(parse e)))
+    ((cdr ,e) `(cdr-exp ,(parse e)))
+    ((null? ,e) `(null?-exp ,(parse e)))
+    ((list . ,es) (guard (pair? es))  ; need a type, so no empties
+     `(list-exp ,(map parse es)))
     ((,e1 . ,es) `(call-exp ,(parse e1) ,(map parse es)))
     (? (error 'parse "syntax error" sexp))))
 
@@ -284,6 +320,7 @@
     (void 'void-type)
     ((-> ,arg-ts ,res-t) (guard (pair? arg-ts))
      `(proc-type ,(map parse-type arg-ts) ,(parse-type res-t)))
+    ((list-of ,texp) `(list-type ,(parse-type texp)))
     (? (error 'parse-type "invalid type syntax" sexp))))
 
 ;; parse-let-exp : List-of(S-exp x Sym) x S-exp -> Exp
@@ -400,6 +437,43 @@
   (test 'bool-type
         (check '(unpack p q = (pair (pair 1 true) (pair false 2))
                  in (unpack x b = p in (zero? x)))))
+
+  ;; Lists
+  (test '(list-type int-type) (check '(emptylist of int)))
+  (test '(list-type (list-type int-type))
+        (check '(emptylist of (list-of int))))
+  (test '(list-type bool-type) (check '(list true)))
+  (test '(list-type bool-type) (check '(cons true (emptylist of bool))))
+  (test '(list-type int-type)
+        (check '(cons 1 (cons 2 (cons (if (zero? 1) 0 3)
+                                      (emptylist of int))))))
+  (test '(list-type int-type) (check '(list 1 2 3)))
+  (test 'bool-type (check '(null? (emptylist of bool))))
+  (test '(list-type int-type)
+        (check '(list (- 4 2) (- 8 3) ((proc ((x int)) x) 10))))
+  (test 'int-type (check '(car (emptylist of int))))
+  (test '(list-type int-type) (check '(cdr (list 1 2))))
+  (test 'bool-type
+        (check '(null? (cdr (cons (car (list 4 3))
+                                  (cdr (list 5 6)))))))
+  (test 'int-type
+        (check
+         '(letrec ((int add ((x int) (y int)) =
+                     (- x (- 0 y)))
+                  (int sum ((ns (list-of int))) =
+                     (if (null? ns)
+                         0
+                         (add (car ns) (sum (cdr ns))))))
+           in (sum (list 1 2 3 4 5)))))
+  (test #t (rejected? '(cons 2 (emptylist of bool))))
+  (test #t (rejected? '(cons true (cons false (emptylist of int)))))
+  (test #t (rejected? '(list 1 true 3)))
+  (test #t (rejected? '(list (if (zero? 1) (- 4 2) 0) true false)))
+  (test #t (rejected? '(null? 4)))
+  (test #t (rejected? '(null? (cons true (emptylist of int)))))
+  (test #t (rejected? '(car 4)))
+  (test #t (rejected? '(cdr 4)))
+  (test #t (rejected? '(cons (car (list 2 3)) (cdr (list true)))))
 
   (test #t (rejected? '(- (zero? 3) 2)))
   (test #t (rejected? '(- 3 (proc ((x int)) x))))
