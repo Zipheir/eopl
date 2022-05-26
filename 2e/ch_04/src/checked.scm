@@ -172,6 +172,11 @@
      (type-of-call-exp rator rands exp tenv))
     ((letrec-exp . ,rest)
      (apply type-of-letrec-exp (append rest (list tenv))))
+    ((set-exp ,var ,exp1)
+     (let ((ty (type-of exp1 tenv)))
+       (check-equal-type ty (apply-tenv tenv var) exp)
+       'void-type))
+    ((begin-exp ,exps) (type-of-begin-exp exps tenv))
     (? (error 'type-of "invalid expression" exp))))
 
 ;; type-of-call-exp : Exp x List-of(Exp) x Exp x Tenv -> Type
@@ -208,6 +213,15 @@
               p-res-types)
     (type-of lr-body lr-body-tenv)))
 
+;; type-of-begin-exp : List-of(Exp) x Tenv -> Type
+(define (type-of-begin-exp exps tenv)
+  (let loop ((es exps))
+    (pmatch es
+      ((,e) (type-of e tenv))  ; tail call
+      ((,e . ,es*)
+       (type-of e tenv)        ; check type, but discard the result
+       (loop es*)))))
+
 ;;; Interpreter
 
 ;; The usual, just like LETREC.  TODO.
@@ -235,6 +249,10 @@
     ((let ,binds in ,b) (parse-let-exp binds b))
     ((proc ,args ,e) (parse-proc-exp args e))
     ((letrec ,binds in ,b) (parse-letrec-exp binds b))
+    ((set ,v ,e) (guard (symbol? v))
+     `(set-exp ,v ,(parse e)))
+    ((begin . ,es) (guard (pair? es))
+     `(begin-exp ,(map parse es)))
     ((,e1 . ,es) `(call-exp ,(parse e1) ,(map parse es)))
     (? (error 'parse "syntax error" sexp))))
 
@@ -243,6 +261,7 @@
   (pmatch sexp
     (int 'int-type)
     (bool 'bool-type)
+    (void 'void-type)
     ((-> ,arg-ts ,res-t) (guard (pair? arg-ts))
      `(proc-type ,(map parse-type arg-ts) ,(parse-type res-t)))
     (? (error 'parse-type "invalid type syntax" sexp))))
@@ -339,6 +358,12 @@
         (check '(let ((x = 10) (y = 11)) in (- y x))))
   (test 'int-type
         (check '(let ((b = true) (x = 4)) in (if b x 0))))
+  (test 'int-type (check '(begin 1 2 3)))
+  (test 'bool-type (check '(begin true 2 false)))
+  (test 'void-type
+        (check '(let ((x = 10)) in (set x 11))))
+  (test 'bool-type
+        (check '(let ((b = false)) in (begin (set b true) b))))
 
   (test #t (rejected? '(- (zero? 3) 2)))
   (test #t (rejected? '(- 3 (proc ((x int)) x))))
@@ -353,4 +378,8 @@
   (test #t (rejected? '(4 4)))
   (test #t (rejected? '(((proc ((x int)) x) 10) 3)))
   (test #t (rejected? '(let ((b = false) (x = 5)) in (if x b true))))
+  (test #t (rejected? '(let ((b = false)) in (set b 10))))
+  (test #t (rejected? '(let ((b = false))
+                        in (let ((v = (set b true)))
+                            in (- v 4)))))
   )
