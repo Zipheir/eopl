@@ -130,6 +130,7 @@
   (pmatch ty
     (int-type 'int)
     (bool-type 'bool)
+    (void-type 'void)
     ((proc-type ,arg-type ,res-type)
      `(,(type-to-external-form arg-type)
        ->
