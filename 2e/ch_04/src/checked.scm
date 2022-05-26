@@ -189,15 +189,19 @@
        t-res)
       (? (raise (make-type-cond rator-type 'proc-type orig-exp))))))
 
-;; type-of-letrec-exp : Type x Var x Var x Type x Exp x Exp x
-;;                        Tenv -> Type
-(define (type-of-letrec-exp p-res-type p-name b-vars b-var-types p-body
-                            lr-body tenv)
-  (let* ((p-type `(proc-type ,b-var-types ,p-res-type))
-         (lr-body-tenv (extend-tenv p-name p-type tenv))
-         (p-body-type
-          (type-of p-body
-                   (extend-tenv* b-vars b-var-types lr-body-tenv))))
+;; type-of-letrec-exp : List-of(Type) x List-of(Var) x
+;;                        List-of(List-of(Var)) x
+;;			  List-of(List-of(Type)) x List-of(Exp) x
+;;			  Exp x Tenv -> Type
+(define (type-of-letrec-exp p-res-types p-names b-varss b-var-typess
+                            p-bodies lr-body tenv)
+  (let* ((p-types (map (lambda (bvts rt) `(proc-type ,bvts ,rt))
+                       b-var-typess
+                       p-res-types))
+         (lr-body-tenv (extend-tenv* p-names p-types tenv)))
+    (for-each (lambda (vars var-types body res-type)
+                (check-equal-type
+                 (type-of body (extend-tenv* vars var-types 
     (type-of lr-body lr-body-tenv)))
 
 ;;; Interpreter
@@ -226,9 +230,7 @@
      `(if-exp ,(parse e1) ,(parse e2) ,(parse e3)))
     ((let ,binds in ,b) (parse-let-exp binds b))
     ((proc ,args ,e) (parse-proc-exp args e))
-    ((letrec ,rt ,nm ,args = ,e in ,b)
-     (guard (symbol? nm))
-     (parse-letrec-exp rt nm args e b))
+    ((letrec ,binds in ,b) (parse-letrec-exp binds b))
     ((,e1 . ,es) `(call-exp ,(parse e1) ,(map parse es)))
     (? (error 'parse "syntax error" sexp))))
 
@@ -255,27 +257,37 @@
     (let-values (((ids exps) (collect binds '() '())))
       `(let-exp ,ids ,exps ,(parse body)))))
 
-(define (parse-letrec-exp res-texp name args p-body lr-body)
-  (pmatch (parse-args args)
-    ((,ids . ,id-ts)
-     (list 'letrec-exp (parse-type res-texp)
-                       name
-                       ids
-                       id-ts
-                       (parse p-body)
-                       (parse lr-body)))))
+;; parse-letrec-exp : List x S-exp -> Exp
+(define (parse-letrec-exp binds lr-body)
+  (letrec
+   ((collect
+     (lambda (bs res-ts p-names texpss idss bodies)
+       (pmatch bs
+         (() (values res-ts p-names texpss idss bodies))
+         (((,rt ,nm ,vs = ,body) . ,bs*)
+          (let-values (((ids ts) (parse-args vs)))
+            (collect bs*
+                     (cons rt res-ts)
+                     (cons nm p-names)
+                     (cons ts texpss)
+                     (cons ids idss)
+                     (cons (parse body) bodies))))))))
+
+    (let-values (((res-ts p-names texpss idss bodies)
+                  (collect binds '() '() '() '() '())))
+      (list 'letrec-exp res-ts p-names texpss idss bodies
+            (parse lr-body)))))
 
 ;; parse-args : List -> (List-of(Sym) x List-of(Type))
 (define (parse-args args+types)
   (pmatch (unzip args+types)
     ((,ids ,ts) (guard (every symbol? ids))
-     (cons ids (map parse-type ts)))))
+     (values ids (map parse-type ts)))))
 
 ;; parse-proc-exp : List x List -> Exp
 (define (parse-proc-exp args body)
-  (pmatch (parse-args args)
-    ((,ids . ,ts)
-     `(proc-exp ,ts ,ids ,(parse body)))))
+  (let-values (((ids ts) (parse-args args)))
+    `(proc-exp ,ts ,ids ,(parse body))))
 
 ;; Convenience driver
 (define (check sexp)
