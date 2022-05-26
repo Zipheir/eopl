@@ -200,8 +200,12 @@
                        p-res-types))
          (lr-body-tenv (extend-tenv* p-names p-types tenv)))
     (for-each (lambda (vars var-types body res-type)
-                (check-equal-type
-                 (type-of body (extend-tenv* vars var-types 
+                (let ((ext (extend-tenv* vars var-types lr-body-tenv)))
+                  (check-equal-type (type-of body ext) res-type body)))
+              b-varss
+              b-var-typess
+              p-bodies
+              p-res-types)
     (type-of lr-body lr-body-tenv)))
 
 ;;; Interpreter
@@ -267,7 +271,7 @@
          (((,rt ,nm ,vs = ,body) . ,bs*)
           (let-values (((ids ts) (parse-args vs)))
             (collect bs*
-                     (cons rt res-ts)
+                     (cons (parse-type rt) res-ts)
                      (cons nm p-names)
                      (cons ts texpss)
                      (cons ids idss)
@@ -275,7 +279,7 @@
 
     (let-values (((res-ts p-names texpss idss bodies)
                   (collect binds '() '() '() '() '())))
-      (list 'letrec-exp res-ts p-names texpss idss bodies
+      (list 'letrec-exp res-ts p-names idss texpss bodies
             (parse lr-body)))))
 
 ;; parse-args : List -> (List-of(Sym) x List-of(Type))
@@ -323,9 +327,9 @@
                   (proc ((x int))
                     (zero? (f x))))))
   (test '(proc-type (int-type) int-type)
-        (check '(letrec int f ((x int)) = x in f)))
+        (check '(letrec ((int f ((x int)) = x)) in f)))
   (test 'bool-type
-        (check '(letrec bool g ((x int)) = (zero? (- x 1))
+        (check '(letrec ((bool g ((x int)) = (zero? (- x 1))))
                  in (g 10))))
   (test 'int-type
         (check '((proc ((x int))
@@ -345,7 +349,7 @@
   (test #t (rejected? '(let ((x = 4)) in (if x 0 1))))
   (test #t (rejected? '((proc ((f (-> (int) int))) (f 10))
                         (proc ((x int)) (zero? x)))))
-  (test #t (rejected? '(letrec int f ((x bool)) = (f (f x)) in 4)))
+  (test #t (rejected? '(letrec ((int f ((x bool)) = (f (f x)))) in 4)))
   (test #t (rejected? '(4 4)))
   (test #t (rejected? '(((proc ((x int)) x) 10) 3)))
   (test #t (rejected? '(let ((b = false) (x = 5)) in (if x b true))))
