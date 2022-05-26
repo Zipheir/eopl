@@ -131,6 +131,9 @@
     (int-type 'int)
     (bool-type 'bool)
     (void-type 'void)
+    ((pair-type ,type1 ,type2)
+     `(pair-of ,(type-to-external-form type1)
+               ,(type-to-external-form type1)))
     ((proc-type ,arg-type ,res-type)
      `(,(type-to-external-form arg-type)
        ->
@@ -178,6 +181,18 @@
        (check-equal-type ty (apply-tenv tenv var) exp)
        'void-type))
     ((begin-exp ,exps) (type-of-begin-exp exps tenv))
+    ((pair-exp ,exp1 ,exp2)
+     (let ((ty1 (type-of exp1 tenv))
+           (ty2 (type-of exp2 tenv)))
+       (list 'pair-type ty1 ty2)))
+    ((unpack-exp ,var1 ,var2 ,exp1 ,body)
+     (pmatch (type-of exp1 tenv)
+       ((pair-type ,ty1 ,ty2)
+        (type-of body
+                 (extend-tenv* (list var1 var2)
+                               (list ty1 ty2)
+                               tenv)))
+       (,type (raise (make-type-cond '(pair * *) type exp1)))))
     (? (error 'type-of "invalid expression" exp))))
 
 ;; type-of-call-exp : Exp x List-of(Exp) x Exp x Tenv -> Type
@@ -254,6 +269,10 @@
      `(set-exp ,v ,(parse e)))
     ((begin . ,es) (guard (pair? es))
      `(begin-exp ,(map parse es)))
+    ((pair ,e1 ,e2) `(pair-exp ,(parse e1) ,(parse e2)))
+    ((unpack ,v1 ,v2 = ,e in ,b)
+     (guard (symbol? v1) (symbol? v2))
+     (list 'unpack-exp v1 v2 (parse e) (parse b)))
     ((,e1 . ,es) `(call-exp ,(parse e1) ,(map parse es)))
     (? (error 'parse "syntax error" sexp))))
 
@@ -366,6 +385,22 @@
   (test 'bool-type
         (check '(let ((b = false)) in (begin (set b true) b))))
 
+  ;; Pairs
+  (test '(pair-type int-type int-type) (check '(pair 1 2)))
+  (test '(pair-type int-type bool-type) (check '(pair 1 (zero? 2))))
+  (test '(pair-type bool-type int-type)
+        (check '(let ((x = 5))
+                 in (if (zero? x) (pair true x) (pair false x)))))
+  (test '(pair-type (pair-type bool-type bool-type)
+                    (pair-type int-type int-type))
+        (check '(pair (pair true false) (pair 2 3))))
+
+  ;; Unpack
+  (test 'int-type (check '(unpack x y = (pair 1 2) in (- x y))))
+  (test 'bool-type
+        (check '(unpack p q = (pair (pair 1 true) (pair false 2))
+                 in (unpack x b = p in (zero? x)))))
+
   (test #t (rejected? '(- (zero? 3) 2)))
   (test #t (rejected? '(- 3 (proc ((x int)) x))))
   (test #t (rejected? '(zero? (zero? 0))))
@@ -383,4 +418,7 @@
   (test #t (rejected? '(let ((b = false))
                         in (let ((v = (set b true)))
                             in (- v 4)))))
+  (test #t (rejected? '(if true (pair 1 true) (pair true 1))))
+  (test #t (rejected? '(unpack a b = 4 in a)))
+  (test #t (rejected? '(unpack x y = (pair 2 3) in (if x y 0))))
   )
