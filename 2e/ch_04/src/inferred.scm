@@ -8,6 +8,7 @@
         (rename (rnrs lists (6)) (for-all every)))
 
 (include "../../../src/pmatch.scm")
+(include "../../../src/test.scm")
 
 ;;; Utility
 
@@ -114,6 +115,9 @@
 ;;; Inference
 
 (define (type-of exp tenv)
+  (display "type-of: ")
+  (display exp)
+  (newline)
   (pmatch exp
     (true-exp 'bool-type)
     (false-exp 'bool-type)
@@ -334,3 +338,63 @@
   (type-to-external-form
    (infer-type
     (parse sexp))))
+
+;;; Tests
+
+(define (run-tests)
+  (define (rejected? sexp)
+    (guard (con
+             ((type-cond? con) #t)
+             (else (raise con)))
+      (parse-and-infer sexp)))
+
+  (test 'bool (parse-and-infer 'true))
+  (test 'bool (parse-and-infer 'false))
+  (test 'int (parse-and-infer 4))
+  (test 'bool (parse-and-infer '(zero? 4)))
+  (test 'int (parse-and-infer '(- 4 1)))
+  (test 'int (parse-and-infer '(if (zero? 3) 1 0)))
+  (test 'int (parse-and-infer '(let ((x = 4)) in x)))
+  (test 'bool (parse-and-infer '(let ((z = (zero? 3))) in z)))
+  (test '(-> int int)
+        (parse-and-infer '(proc ((x . int)) 0)))
+  (test '(-> int int)
+         (parse-and-infer
+          '(let ((f = (proc ((x . int)) (- x (- 0 1)))))
+            in (proc ((y . int)) (- (f y) 4)))))
+  (test '(-> int bool)
+        (parse-and-infer '(proc ((x . int)) (zero? x))))
+  (test '(-> ((-> (int) int)) (-> (int) bool))
+        (parse-and-infer
+         '(proc ((f . (-> (int) int)))
+            (proc ((x . int)) (zero? (f x))))))
+  (test '(-> (int) int)
+        (parse-and-infer '(letrec ((int f ((x . int)) = x)) in f)))
+  (test 'bool
+        (parse-and-infer
+         '(letrec ((bool g ((x . int)) = (zero? (- x 1))))
+           in (g 10))))
+  (test 'int
+        (parse-and-infer
+         '((proc ((x . int))
+             ((proc ((y . int)) (- x y)) (- x 2)))
+           4)))
+  (test 'int
+        (parse-and-infer '(let ((x = 10) (y = 11)) in (- y x))))
+  (test 'int
+        (parse-and-infer '(let ((b = true) (x = 4)) in (if b x 0))))
+
+  (test #t (rejected? '(- (zero? 3) 2)))
+  (test #t (rejected? '(- 3 (proc ((x . int)) x))))
+  (test #t (rejected? '(zero? (zero? 0))))
+  (test #t (rejected? '(if 3 1 0)))
+  (test #t (rejected? '(if (zero? 3) (zero? 1) 4)))
+  (test #t (rejected? '(if (zero? 0) 3 ((proc ((x . int)) (zero? x)) 4))))
+  (test #t (rejected? '(let ((x = 4)) in (if x 0 1))))
+  (test #t (rejected? '((proc ((f . (-> (int) int))) (f 10))
+                        (proc ((x . int)) (zero? x)))))
+  (test #t (rejected? '(letrec ((int f ((x . bool)) = (f (f x)))) in 4)))
+  (test #t (rejected? '(4 4)))
+  (test #t (rejected? '(((proc ((x . int)) x) 10) 3)))
+  (test #t (rejected? '(let ((b = false) (x = 5)) in (if x b true))))
+  )
