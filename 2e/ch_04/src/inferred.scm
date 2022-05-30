@@ -174,7 +174,7 @@
          (res-types (map expand-optional-type-expression res-texps))
          (proc-types
           (map (lambda (ats rt) `(proc-type ,ats ,rt))
-               args-typess
+               arg-typess
                res-types))
          (body-tenv (extend-tenv* p-names proc-types tenv)))
     (for-each
