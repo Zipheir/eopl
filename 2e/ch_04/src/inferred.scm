@@ -90,10 +90,8 @@
     (int-type 'int)
     (bool-type 'bool)
     ((proc-type ,arg-types ,res-type)
-     (append
-      (map type-to-external-form arg-types)
-      '(->)
-      (list (type-to-external-form res-type))))
+     `(-> ,@(map type-to-external-form arg-types)
+          ,(type-to-external-form res-type)))
     ((tvar-type ,serial ?)
      (if (tvar-non-empty? ty)
          (type-to-external-form (tvar-contents ty))
