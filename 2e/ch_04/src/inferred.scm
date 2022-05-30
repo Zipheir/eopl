@@ -180,7 +180,7 @@
     (for-each
      (lambda (ids arg-types p-body res-type)
        (check-equal-types!
-        (type-of p-body (extend-tenv* ids arg-types tenv))
+        (type-of p-body (extend-tenv* ids arg-types body-tenv))
         res-type
         p-body))
      idss arg-typess p-bodies res-types)
