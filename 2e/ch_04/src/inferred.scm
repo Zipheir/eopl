@@ -87,7 +87,8 @@
 
 (define (type-to-external-form ty)
   (pmatch ty
-    ((atomic-type ,name) name)
+    (int-type 'int)
+    (bool-type 'bool)
     ((proc-type ,arg-types ,res-type)
      (append
       (map type-to-external-form arg-types)
