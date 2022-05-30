@@ -130,7 +130,7 @@
      (type-of-proc-exp texps ids body tenv))
     ((primapp-exp ,prim ,rands)
      (type-of-application (type-of-primitive prim)
-                          (type-of-exps rands tenv)
+                          (types-of-exps rands tenv)
                           prim
                           rands
                           exp))
