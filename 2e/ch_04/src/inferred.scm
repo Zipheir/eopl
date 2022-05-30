@@ -206,7 +206,7 @@
             (check-equal-types! res-type1 res-type2 exp))
            (? (raise-type-error t1 t2 exp))))))
 
-(define (check-tvar-equal-type? tvar ty exp)
+(define (check-tvar-equal-type! tvar ty exp)
   (if (tvar-non-empty? tvar)
       (check-equal-types! (tvar-contents tvar) ty exp)
       (begin
