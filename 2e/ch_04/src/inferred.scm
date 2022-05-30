@@ -301,7 +301,7 @@
 
     (let-values (((res-ts p-names texpss idss bodies)
                   (collect binds '() '() '() '() '())))
-      (list 'letrec-exp res-ts p-names idss texpss bodies
+      (list 'letrec-exp res-ts p-names texpss idss bodies
             (parse lr-body)))))
 
 ;; parse-args : List -> (List-of(Sym) x List-of(Type))
