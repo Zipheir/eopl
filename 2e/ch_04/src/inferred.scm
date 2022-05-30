@@ -162,6 +162,13 @@
                         exp)
     res-type))
 
+(define (type-of-primitive prim)
+  (case prim
+    ((add-prim sub-prim mul-prim div-prim mod-prim)
+     '(proc-type (int-type int-type) int-type))
+    ((zero?-prim) '(proc-type (int-type) bool-type))
+    (else (error 'type-of-primitive "unknown primitive" prim))))
+
 (define (type-of-let-exp ids rands body tenv)
   (let ((body-tenv (extend-tenv* ids (types-of-exps rands tenv) tenv)))
     (type-of body body-tenv)))
@@ -248,6 +255,13 @@
     (true 'true-exp)
     (false 'false-exp)
     (,v (guard (symbol? v)) `(var-exp ,v))
+    ((zero? ,e) `(primapp-exp zero?-prim (list ,(parse e))))
+    ((+ ,e1 ,e2)
+     `(primapp-exp add-prim (list ,(parse e1) ,(parse e2))))
+    ((- ,e1 ,e2)
+     `(primapp-exp sub-prim (list ,(parse e1) ,(parse e2))))
+    ((* ,e1 ,e2)
+     `(primapp-exp mul-prim (list ,(parse e1) ,(parse e2))))
     ((if ,e1 ,e2 ,e3)
      `(if-exp ,(parse e1) ,(parse e2) ,(parse e3)))
     ((let ,binds in ,b) (parse-let-exp binds b))
