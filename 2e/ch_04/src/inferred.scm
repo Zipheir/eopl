@@ -218,7 +218,7 @@
    ((check
      (lambda (ty1)
        (pmatch ty1
-         (t (guard (atomic-type? t)) #t)
+         (,t (guard (atomic-type? t)) #t)
          ((proc-type ,arg-types ,res-type)
           (for-each check arg-types)
           (check res-type))
