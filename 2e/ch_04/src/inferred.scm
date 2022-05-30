@@ -314,3 +314,10 @@
 (define (parse-proc-exp args body)
   (let-values (((ids ts) (parse-args args)))
     `(proc-exp ,ts ,ids ,(parse body))))
+
+;;; Main driver
+
+(define (parse-and-infer sexp)
+  (type-to-external-form
+   (infer-type
+    (parse sexp))))
