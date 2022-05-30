@@ -201,8 +201,7 @@
         ((tvar-type? t1) (check-tvar-equal-type! t1 t2 exp))
         ((tvar-type? t2) (check-tvar-equal-type! t2 t1 exp))
         ((and (atomic-type? t1) (atomic-type? t2))
-         (unless (eqv? (atomic-type->name t1) (atomic-type->name t2))
-           (raise-type-error t1 t2 exp)))
+         (unless (eqv? t1 t2) (raise-type-error t1 t2 exp)))
         (else
          (pmatch (list t1 t2)
            (((proc-type ,arg-types1 ,res-type1)
