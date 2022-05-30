@@ -355,13 +355,13 @@
   (test 'int (parse-and-infer '(if (zero? 3) 1 0)))
   (test 'int (parse-and-infer '(let ((x = 4)) in x)))
   (test 'bool (parse-and-infer '(let ((z = (zero? 3))) in z)))
-  (test '(-> int int)
+  (test '(-> (int) int)
         (parse-and-infer '(proc ((x . int)) 0)))
-  (test '(-> int int)
+  (test '(-> (int) int)
          (parse-and-infer
           '(let ((f = (proc ((x . int)) (- x (- 0 1)))))
             in (proc ((y . int)) (- (f y) 4)))))
-  (test '(-> int bool)
+  (test '(-> (int) bool)
         (parse-and-infer '(proc ((x . int)) (zero? x))))
   (test '(-> ((-> (int) int)) (-> (int) bool))
         (parse-and-infer
