@@ -44,11 +44,10 @@
 (define (atomic-type? t)
   (symbol? t))
 
-(define (expand-optional-type-expression otexp tenv)
+(define (expand-optional-type-expression otexp)
   (pmatch otexp
     (no-type-exp (fresh-tvar))
-    ((a-type-exp ,texp)
-     (expand-type-expression texp tenv))
+    ((a-type-exp ,texp) (expand-type-expression texp))
     (? (error 'expand-optional-type-expression
               "invalid expression"
               otexp))))
@@ -150,7 +149,7 @@
 
 (define (type-of-proc-exp texps ids body tenv)
   (let* ((arg-types (map (lambda (texp)
-                           (expand-optional-type-expression texp tenv))
+                           (expand-optional-type-expression texp))
                          texps))
          (res-type (type-of body (extend-tenv* ids arg-types tenv))))
     `(proc-type ,arg-types ,res-type)))
