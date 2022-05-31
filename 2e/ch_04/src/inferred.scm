@@ -118,9 +118,6 @@
 ;;; Inference
 
 (define (type-of exp tenv)
-  (display "type-of: ")
-  (display exp)
-  (newline)
   (pmatch exp
     (true-exp 'bool-type)
     (false-exp 'bool-type)
