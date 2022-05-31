@@ -1,0 +1,16 @@
+# Exercise 4.18
+
+Trying to use the original type-of-application from CHECKED causes
+inference to fail in some cases, when the algorithm is not able to
+fully determine the type of the operator of an application.  Here's
+an example that breaks:
+
+(proc ((f . ?)) (proc ((x . int)) (zero? (f x))))
+
+This should be given the type ((int -> int) -> bool), but the type
+variable assigned to 'f' is not filled in when typing the (f x)
+call.  Thus, inference breaks with an "invalid operator" error,
+since it's an empty box.
+
+So it's vital that the rator-type gets unified against the actual
+parameter types, as in the reworked version of type-of-application.
