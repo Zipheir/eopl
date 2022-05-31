@@ -18,7 +18,8 @@
     (((,a . ,b) . ,ps*)
      (pmatch (unzip ps*)
        ((,as ,bs)
-        (list (cons a as) (cons b bs)))))))
+        (list (cons a as) (cons b bs)))))
+    (? (error 'unzip "bad alist" ps))))
 
 (define (natural? x)
   (and (integer? x) (not (negative? x))))
@@ -61,6 +62,10 @@
      (list 'proc-type
            (map expand-optional-type-expression arg-texps)
            (expand-optional-type-expression res-texp)))
+    ((pair-type-exp ,texp1 ,texp2)
+     (list 'pair-type
+           (expand-optional-type-expression texp1)
+           (expand-optional-type-expression texp2)))
     (? (error 'expand-type-expression
               "invalid expression"
               texp))))
@@ -78,16 +83,19 @@
 
 (define (tvar-contents ty)
   (pmatch ty
-    ((tvar-type ? ,box) (vector-ref box 0))))
+    ((tvar-type ? ,box) (vector-ref box 0))
+    (? (error 'tvar-contents "not a tvar" ty))))
 
 (define (tvar-set-contents! ty val)
   (pmatch ty
-    ((tvar-type ? ,box) (vector-set! box 0 val))))
+    ((tvar-type ? ,box) (vector-set! box 0 val))
+    (? (error 'tvar-set-contents! "not a tvar" ty))))
 
 (define (tvar-non-empty? ty)
   (pmatch ty
     ((tvar-type ? ,box)
-     (not (null? (vector-ref box 0))))))
+     (not (null? (vector-ref box 0))))
+    (? (error 'tvar-non-empty? "not a tvar" ty))))
 
 (define (type-to-external-form ty)
   (pmatch ty
@@ -101,6 +109,10 @@
          (type-to-external-form (tvar-contents ty))
          (string->symbol
           (string-append "tvar" (number->string serial)))))
+    ((pair-type ,ty1 ,ty2)
+     (list 'pair-of
+           (type-to-external-form ty1)
+           (type-to-external-form ty2)))
     (? (error 'type-to-external-form "invalid type" ty))))
 
 ;;; Type error condition
@@ -145,6 +157,9 @@
     ((let-exp ,ids ,rands ,body) (type-of-let-exp ids rands body tenv))
     ((letrec-exp . ,rest)
      (apply type-of-letrec-exp (append rest (list tenv))))
+    ((pair-exp ,exp1 ,exp2) (type-of-pair-exp exp1 exp2 tenv))
+    ((unpack-exp ,v1 ,v2 ,pexp ,body)
+     (type-of-unpack-exp v1 v2 pexp body tenv))
     (? (error 'type-of "invalid expression" exp))))
 
 (define (types-of-exps exps tenv)
@@ -196,6 +211,20 @@
      idss arg-typess p-bodies res-types)
     (type-of lr-body body-tenv)))
 
+(define (type-of-pair-exp exp1 exp2 tenv)
+  (let ((ty1 (type-of exp1 tenv))
+        (ty2 (type-of exp2 tenv)))
+    (list 'pair-type ty1 ty2)))
+
+(define (type-of-unpack-exp v1 v2 pexp body tenv)
+  (pmatch (type-of pexp tenv)
+    ((pair-type ,ty1 ,ty2)
+     (type-of body
+              (extend-tenv* (list v1 v2)
+                            (list ty1 ty2)
+                            tenv)))
+    (,t (raise (make-type-cond '(pair * *) t pexp)))))
+
 (define (check-equal-types! t1 t2 exp)
   (cond ((eqv? t1 t2))
         ((tvar-type? t1) (check-tvar-equal-type! t1 t2 exp))
@@ -213,6 +242,10 @@
                       arg-types1
                       arg-types2)
             (check-equal-types! res-type1 res-type2 exp))
+           (((pair-type ,ty-a1 ,ty-a2)
+             (pair-type ,ty-b1 ,ty-b2))
+            (check-equal-types! ty-a1 ty-b1 exp)
+            (check-equal-types! ty-a2 ty-b2 exp))
            (? (raise-type-error t1 t2 exp))))))
 
 (define (check-tvar-equal-type! tvar ty exp)
@@ -231,12 +264,16 @@
          ((proc-type ,arg-types ,res-type)
           (for-each check arg-types)
           (check res-type))
+         ((pair-type ,ty1 ,ty2)
+          (check ty1)
+          (check ty2))
          ((tvar-type ? ?)
           (if (tvar-non-empty? ty1)
               (check (tvar-contents ty1))
               (if (eqv? tvar ty1)
                   (error 'check-no-occurrence!
-                         "occurrence check failed" tvar ty1 exp))))))))
+                         "occurrence check failed" tvar ty1 exp))))
+         (? (error 'check-no-occurrence! "invalid type" ty1 exp))))))
 
     (check ty)))
 
@@ -268,6 +305,10 @@
     ((let ,binds in ,b) (parse-let-exp binds b))
     ((proc ,args ,e) (parse-proc-exp args e))
     ((letrec ,binds in ,b) (parse-letrec-exp binds b))
+    ((pair ,e1 ,e2) (list 'pair-exp (parse e1) (parse e2)))
+    ((unpack ,v1 ,v2 = ,e in ,b)
+     (guard (symbol? v1) (symbol? v2))
+     (list 'unpack-exp v1 v2 (parse e) (parse b)))
     ((,e1 . ,es) `(app-exp ,(parse e1) ,(map parse es)))
     (? (error 'parse "syntax error" sexp))))
 
@@ -283,6 +324,9 @@
     ((-> ,ats ,rt)
      `(proc-type-exp ,(map parse-optional-type-syntax ats)
                      ,(parse-optional-type-syntax rt)))
+    ((pair-of ,texp1 ,texp2)
+     `(pair-type-exp ,(parse-optional-type-syntax texp1)
+                     ,(parse-optional-type-syntax texp2)))
     (? (error 'parse-type-syntax "invalid type expression" sexp))))
 
 ;; parse-let-exp : List-of(S-exp x Sym) x S-exp -> Exp
@@ -385,6 +429,21 @@
   (test 'int
         (parse-and-infer '(let ((b = true) (x = 4)) in (if b x 0))))
 
+  (test '(pair-of int int) (parse-and-infer '(pair 1 2)))
+  (test '(pair-of int bool) (parse-and-infer '(pair 1 (zero? 2))))
+  (test '(pair-of bool int)
+        (parse-and-infer
+         '(let ((x = 5))
+           in (if (zero? x) (pair true x) (pair false x)))))
+  (test '(pair-of (pair-of bool bool) (pair-of int int))
+        (parse-and-infer '(pair (pair true false) (pair 2 3))))
+
+  (test 'int (parse-and-infer '(unpack x y = (pair 1 2) in (- x y))))
+  (test 'bool
+        (parse-and-infer
+         '(unpack p q = (pair (pair 1 true) (pair false 2))
+           in (unpack x b = p in (zero? x)))))
+
   ;; Some types inferred.
 
   (test '(-> (int) int)
@@ -415,6 +474,23 @@
                    (? odd ((x . ?)) =
                       (if (zero? x) false (odd (- x 1)))))
            in (even 8))))
+  (test '(-> (int int) (pair-of int int))
+        (parse-and-infer
+         '(proc ((x . ?) (y . ?))
+            (pair (- x 0) (* y 1)))))
+  (test 'int
+        (parse-and-infer
+         '((proc ((p . (pair-of ? ?)))
+             (unpack a b = p
+              in (if (zero? a) b a)))
+           (pair 2 3))))
+  (test '(pair-of bool bool)
+        (parse-and-infer
+         '(let ((p = (pair 1 2))
+                (f = (proc ((p . (pair-of ? ?)))
+                       (unpack a b = p
+                        in (pair (zero? a) (zero? b))))))
+           in (f p))))
 
   (test #t (rejected? '(- (zero? 3) 2)))
   (test #t (rejected? '(- 3 (proc ((x . int)) x))))
@@ -431,4 +507,7 @@
   (test #t (rejected? '(let ((b = false) (x = 5)) in (if x b true))))
   (test #t (rejected? '(letrec ((? f ((x . ?)) = (if x (- x 1) false)))
                         in (f false))))
+  (test #t (rejected? '(if (pair true false) 1 0)))
+  (test #t (rejected? '(unpack a b = 4 in a)))
+  (test #t (rejected? '(unpack a b = (pair true false) in (* a b))))
   )
