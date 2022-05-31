@@ -347,6 +347,8 @@
              (else (raise con)))
       (parse-and-infer sexp)))
 
+  ;; All types provided.
+
   (test 'bool (parse-and-infer 'true))
   (test 'bool (parse-and-infer 'false))
   (test 'int (parse-and-infer 4))
@@ -383,6 +385,37 @@
   (test 'int
         (parse-and-infer '(let ((b = true) (x = 4)) in (if b x 0))))
 
+  ;; Some types inferred.
+
+  (test '(-> (int) int)
+        (parse-and-infer '(proc ((x . ?)) (* x 0))))
+  (test '(-> (int) int)
+         (parse-and-infer
+          '(let ((f = (proc ((x . ?)) (- x (- 0 1)))))
+            in (proc ((y . ?)) (- (f y) 4)))))
+  (test '(-> (int) bool)
+        (parse-and-infer '(proc ((x . ?)) (zero? x))))
+  (test '(-> ((-> (int) int)) (-> (int) bool))
+        (parse-and-infer
+         '(proc ((f . ?))
+            (proc ((x . int)) (zero? (f x))))))
+  (test 'bool
+        (parse-and-infer
+         '(letrec ((? g ((x . ?)) = (zero? (- x 1))))
+           in (g 10))))
+  (test 'int
+        (parse-and-infer
+         '((proc ((x . ?))
+             ((proc ((y . ?)) (- x y)) (- x 2)))
+           4)))
+  (test 'bool
+        (parse-and-infer
+         '(letrec ((? even ((x . ?)) =
+                      (if (zero? x) true (even (- x 1))))
+                   (? odd ((x . ?)) =
+                      (if (zero? x) false (odd (- x 1)))))
+           in (even 8))))
+
   (test #t (rejected? '(- (zero? 3) 2)))
   (test #t (rejected? '(- 3 (proc ((x . int)) x))))
   (test #t (rejected? '(zero? (zero? 0))))
@@ -396,4 +429,6 @@
   (test #t (rejected? '(4 4)))
   (test #t (rejected? '(((proc ((x . int)) x) 10) 3)))
   (test #t (rejected? '(let ((b = false) (x = 5)) in (if x b true))))
+  (test #t (rejected? '(letrec ((? f ((x . ?)) = (if x (- x 1) false)))
+                        in (f false))))
   )
