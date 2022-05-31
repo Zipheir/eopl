@@ -59,8 +59,11 @@
     (bool-type-exp 'bool-type)
     ((proc-type-exp ,arg-texps ,res-texp)
      (list 'proc-type
-           (map expand-type-expression arg-texps)
-           (expand-type-expression res-texp)))))
+           (map expand-optional-type-expression arg-texps)
+           (expand-optional-type-expression res-texp)))
+    (? (error 'expand-type-expression
+              "invalid expression"
+              texp))))
 
 (define fresh-tvar
   (let ((serial-number 0))
