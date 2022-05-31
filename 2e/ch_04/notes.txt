@@ -32,3 +32,22 @@ type, and will be represented by a uniquely-tagged box (length-1
 vector).  A type variable is initially empty (the box contains some
 "bottom" element, (), in this case) and gets filled in by the type
 checker.  Once a type variable is full, its contents are never changed.
+
+There are a lot of loose threads with this type inference algorithm.
+Although the book asserts that "every expression in our language can
+be given automatically assigned a type", some need help to get a valid
+inference, and it's not really clear what characterizes these problem
+expressions.  For instance, in the extended language with pairs (which
+are very simple and don't add any surprises to the inference algorithm),
+this doesn't type-check:
+
+((proc (p : ?) unpack a b = p
+               in if zero?(a) b a)
+ (pair 2 3))
+
+But it does when you fill in (pair-of ? ?) for the type of the parameter.
+You can get an idea of why this is necessary from looking at the algorithm,
+but it would be nice to have a better understanding of what kinds of
+expressions can really be typed.  Throwing more calls to the unifier into
+the algorithm causes more expressions to work--at least, sometimes.  This
+is all kind of fishy.
