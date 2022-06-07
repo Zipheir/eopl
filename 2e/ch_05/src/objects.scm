@@ -212,7 +212,7 @@
     ((const-exp ,n) (list 'num-val n))
     ((var-exp ,v) (apply-env env v))
     ((primapp-exp ,prim ,rands)
-     (apply-primitive ,prim (eval-rands rands env)))
+     (apply-primitive prim (eval-rands rands env)))
     ((if-exp ,test ,con ,alt)
      (if (expval->bool (eval-expression test env))
          (eval-expression con env)
