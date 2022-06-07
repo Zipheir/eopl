@@ -1,6 +1,7 @@
 ;;;; Object-oriented language from Ch. 5 (2e)
 
 (import (rnrs base (6))
+        (rename (rnrs lists (6)) (for-all every))
         )
 
 (include "../../../src/pmatch.scm")
@@ -258,7 +259,7 @@
 (define (parse-method sexp)
   (pmatch sexp
     ((,name ,ids ,body)
-     (guard (symbol? name) (for-all symbol? ids))
+     (guard (symbol? name) (every symbol? ids))
      `(a-method-decl ,name ,ids ,body))
     (? (error 'parse-method
               "invalid method declaration"
