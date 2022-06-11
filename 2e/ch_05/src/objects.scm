@@ -141,6 +141,11 @@
 (define (elaborate-class-decls! c-decls)
   (set! the-class-env c-decls))
 
+(define (lookup-class name)
+  (or (find (lambda (c-decl) (eqv? name (cadr c-decl)))
+            the-class-env)
+      (error 'lookup-class "undeclared class" name)))
+
 ;;; Obj = List-of(Part)
 ;;; Part = (a-part Symbol Vector)
 
@@ -152,10 +157,11 @@
 
 ;; new-object : Sym -> Obj
 (define (new-object class)
-  (unfold (lambda (c) (eqv? c 'object))
-          make-first-part
-          class-decl-super-name
-          class))
+  (if (eqv? class 'object)
+      '()
+      (let ((c-decl (lookup-class class)))
+        (cons (make-first-part c-decl)
+              (new-object (class-decl-super-name c-decl))))))
 
 ;; class-decl-super-name : Class-decl -> Sym
 (define (class-decl-super-name c-decl)
