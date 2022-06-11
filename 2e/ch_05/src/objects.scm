@@ -297,7 +297,7 @@
     ((if ,t ,c ,a)
      `(if-exp ,(parse t) ,(parse c) ,(parse a)))
     ((let ,binds in ,b) (parse-let-exp binds b))
-    ((set ,v = ,e) (guard (symbol? v))
+    ((set ,v := ,e) (guard (symbol? v))
      `(assign-exp ,v ,(parse e)))
     ((send ,o ,m ,rs)
      (guard (symbol? m) (pair-or-null? rs))
