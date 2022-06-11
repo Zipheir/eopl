@@ -154,7 +154,8 @@
 (define (new-object class)
   (unfold (lambda (c) (eqv? c 'object))
           make-first-part
-          class-decl-super-name))
+          class-decl-super-name
+          class))
 
 ;; class-decl-super-name : Class-decl -> Sym
 (define (class-decl-super-name c-decl)
