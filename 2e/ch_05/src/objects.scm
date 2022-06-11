@@ -8,6 +8,9 @@
 
 ;;;; Utility
 
+(define (pair-or-null? obj)
+  (or (pair? obj) (null? obj)))
+
 (define (unfold p f g seed)
   (if (p seed)
       '()
@@ -114,6 +117,21 @@
                 (extend-env (car p) (cdr p) env))
               (empty-env)
               as))
+
+;;;; Primitives
+
+(define (primitive-name? sym)
+  (and (memv sym '(+ - *)) #t))
+
+;; All of these are numeric, so rands is assumed to be a
+;; list of num-vals.
+(define (apply-primitive sym rands)
+  (let ((proc (case sym
+                ((zero?) zero?)
+                ((+) +)
+                ((-) -)
+                ((*) *))))
+     (apply proc (map expval->num rands))))
 
 ;;;; Interpreter
 
@@ -237,7 +255,12 @@
            (obj (new-object c-name)))
        (apply-method 'initialize c-name obj args)
        obj))
+    ((begin-exp ,exps)
+     (for-each (lambda (e) (eval-expression e env)) exps))
     (? (error 'eval-expression "invalid expression" exp))))
+
+(define (eval-rands rands env)
+  (map (lambda (e) (eval-expression e env)) rands))
 
 ;;;; Parser
 
@@ -258,9 +281,48 @@
 
 (define (parse-method sexp)
   (pmatch sexp
-    ((,name ,ids ,body)
+    ((method ,name ,ids ,body)
      (guard (symbol? name) (every symbol? ids))
-     `(a-method-decl ,name ,ids ,body))
+     `(a-method-decl ,name ,ids ,(parse body)))
     (? (error 'parse-method
               "invalid method declaration"
               sexp))))
+
+(define (parse sexp)
+  (pmatch sexp
+    (true 'true-exp)
+    (false 'false-exp)
+    (,n (guard (integer? n)) `(const-exp ,n))
+    (,v (guard (symbol? v)) `(var-exp ,v))
+    ((if ,t ,c ,a)
+     `(if-exp ,(parse t) ,(parse c) ,(parse a)))
+    ((let ,binds in ,b) (parse-let-exp binds b))
+    ((set ,v = ,e) (guard (symbol? v))
+     `(assign-exp ,v ,(parse e)))
+    ((send ,o ,m ,rs)
+     (guard (symbol? m) (pair-or-null? rs))
+     `(method-app-exp ,(parse o) ,m ,(map parse rs)))
+    ((super ,m ,rs) (guard (symbol? m))
+     `(super-call-exp ,m ,(map parse rs)))
+    ((new ,c ,rs) (guard (symbol? c))
+     `(new-object-exp ,c ,(map parse rs)))
+    ((begin . ,exps) (guard (pair? exps))
+     `(begin-exp ,(map parse exps)))
+    ((,prim . ,rs)
+     (guard (symbol? prim) (primitive-name? prim))
+     `(primapp-exp ,prim ,(map parse rs)))
+    (? (error 'parse "syntax error: invalid expression" sexp))))
+
+;; parse-let-exp : List-of(S-exp x Sym) x S-exp -> Exp
+(define (parse-let-exp binds body)
+  (letrec
+   ((collect
+     (lambda (bs ids exps)
+       (pmatch bs
+         (() (values ids exps))
+         (((,v = ,e) . ,bs*) (guard (symbol? v))
+          (collect bs* (cons v ids) (cons (parse e) exps)))
+         (? (error 'parse "syntax error" bs))))))
+
+    (let-values (((ids exps) (collect binds '() '())))
+      `(let-exp ,ids ,exps ,(parse body)))))
