@@ -279,7 +279,7 @@
          (eval-expression alt env)))
     ((let-exp ,ids ,rands ,body)
      (let ((args (eval-rands rands env)))
-       (eval-expression body (extend-env ids rands env))))
+       (eval-expression body (extend-env ids args env))))
     ((assign-exp ,id ,rhs)
      (setref! (apply-env-ref env id) (eval-expression rhs env))
      the-unspecified-value)
