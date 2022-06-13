@@ -286,7 +286,7 @@
     ((method-app-exp ,obj-exp ,name ,rands)
      (let ((args (eval-rands rands env))
            (obj (eval-expression obj-exp env)))
-       (find-and-apply-method name (object->class-name obj) obj args)))
+       (find-method-and-apply name (object->class-name obj) obj args)))
     ((super-call-exp ,name ,rands)
      (let ((args (eval-rands rands env))
            (obj (apply-env env 'self))
