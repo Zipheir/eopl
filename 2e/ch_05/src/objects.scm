@@ -186,6 +186,14 @@
         (cons (make-first-part c-decl)
               (new-object (class-decl-super-name c-decl))))))
 
+;; object->class-name : Obj -> Sym
+;; (Returns the name of the class of the first part of obj.)
+(define (object->class-name obj)
+  (pmatch obj
+    (() 'object)
+    (((a-part ,name ?) . ?) name)
+    (? (error 'object->class-name "invalid object" obj))))
+
 ;; class-decl-super-name : Class-decl -> Sym
 (define (class-decl-super-name c-decl)
   (pmatch c-decl
