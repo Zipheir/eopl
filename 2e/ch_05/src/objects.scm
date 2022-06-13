@@ -198,7 +198,7 @@
 (define (make-first-part c-decl)
   (pmatch c-decl
     ((a-class-decl ,name ? ,fields ?)
-     `(a-part ,name (make-vector (length fields))))
+     `(a-part ,name ,(make-vector (length fields))))
     (? (error 'make-first-part "invalid class declaration" c-decl))))
 
 ;; find-method-and-apply : Sym x Sym x Obj x List-of(Exp) -> Exp-val
