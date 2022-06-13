@@ -260,7 +260,7 @@
     ((new-object-exp ,c-name ,rands)
      (let ((args (eval-rands rands env))
            (obj (new-object c-name)))
-       (apply-method 'initialize c-name obj args)
+       (find-method-and-apply 'initialize c-name obj args)
        obj))
     ((begin-exp ,exps)
      (for-each (lambda (e) (eval-expression e env)) exps))
