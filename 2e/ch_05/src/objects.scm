@@ -133,6 +133,29 @@
                 ((*) *))))
      (apply proc (map expval->num rands))))
 
+;;;; Class accessors
+
+(define (class-name->field-ids name)
+  (pmatch (lookup-class name)
+    ((a-class-decl ? ? ,fs ?) fs)
+    (x (error 'class-name->field-ids
+              "invalid class declaration"
+              x))))
+
+(define (class-name->method-decls name)
+  (pmatch (lookup-class name)
+    ((a-class-decl ? ? ? ,ms) ms)
+    (x (error 'class-name->method-decls
+              "invalid class declaration"
+              x))))
+
+(define (class-name->super-name name)
+  (pmatch (lookup-class name)
+    ((a-class-decl ? ,s ? ?) s)
+    (x (error 'class-name->super-name
+              "invalid class declaration"
+              x))))
+
 ;;;; Interpreter
 
 (define the-class-env '())
@@ -194,6 +217,10 @@
              (else (search (class-name->super-name host)))))))
 
     (search host-name)))
+
+;; lookup-method-decl : Sym x List-of(M-decl) -> M-decl + false
+(define (lookup-method-decl name method-decls)
+  (find (lambda (d) (eqv? name (cadr d))) method-decls))
 
 ;; view-object-as : List-of(Part) x Sym -> List-of(Part)
 (define (view-object-as parts class-name)
