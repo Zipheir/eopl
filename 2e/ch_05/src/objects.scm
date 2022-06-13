@@ -240,7 +240,7 @@
 ;; apply-method : Method-decl x Sym x Obj x List-of(Exp) -> Exp-val
 (define (apply-method m-decl host-name self args)
   (pmatch m-decl
-    ((a-method-decl ,ids ,body)
+    ((a-method-decl ? ,ids ,body)
      (let* ((super-name (class-name->super-name host-name))
             (env (extend-env
                   `(%super self . ,ids)
