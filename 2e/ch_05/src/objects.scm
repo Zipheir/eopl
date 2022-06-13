@@ -215,8 +215,8 @@
    ((search
      (lambda (host)
        (cond ((eqv? host 'object)
-              (error 'apply-method
-                     "no implementation for method"
+              (error 'find-method-and-apply
+                     "class object has no callable methods"
                      m-name))
              ((lookup-method-decl m-name
                                   (class-name->method-decls host)) =>
