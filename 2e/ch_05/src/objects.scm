@@ -21,6 +21,9 @@
         ((p (car xs)) (drop-while p (cdr xs)))
         (else xs)))
 
+(define (concatenate xss)
+  (fold-right append '() xss))
+
 ;;;; References
 
 (define (deref ref)
@@ -74,7 +77,7 @@
 (define (extend-env vars vals env)
   (extend-env-refs vars (list->vector vals) env))
 
-;; extend-env-refs : List-of(Var) x List-of(Exp-val) x Env -> Env
+;; extend-env-refs : List-of(Var) x Vector-of(Exp-val) x Env -> Env
 (define (extend-env-refs vars refs env)
   (cons (list 'ext vars refs) env))
 
@@ -101,14 +104,14 @@
   (error 'apply-env "no binding found" var))
 
 ;; rib-find-position : Var x List-of(Var) -> Int-or-false
+;; Return the position of the last occurrence of var in lis,
+;; or #f if var isn't found.
 (define (rib-find-position var lis)
-  (letrec
-   ((find
-     (lambda (lis i)
-       (cond ((null? lis) #f)
-             ((eqv? (car lis) var) i)
-             (else (find (cdr lis) (+ i 1)))))))
-    (find lis 0)))
+  (let loop ((last #f) (i 0) (lis lis))
+    (cond ((null? lis) last)
+          ((eqv? var (car lis))
+           (loop i (+ i 1) (cdr lis)))
+          (else (loop last (+ i 1) (cdr lis))))))
 
 ;; alist->env : List-of(Var x Scheme-val) -> Env
 ;; No recursive bindings.
@@ -169,29 +172,43 @@
             the-class-env)
       (error 'lookup-class "undeclared class" name)))
 
-;;; Obj = List-of(Part)
-;;; Part = (a-part Symbol Vector)
-
-;; parts-class-name : Part -> Sym
-(define (parts-class-name part)
-  (pmatch part
-    ((a-part ,name ?) name)
-    (? (error 'parts-class-name "invalid part object" part))))
+;;; Obj = Sym x Vector
 
 ;; new-object : Sym -> Obj
-(define (new-object class)
-  (if (eqv? class 'object)
-      '()
-      (let ((c-decl (lookup-class class)))
-        (cons (make-first-part c-decl)
-              (new-object (class-decl-super-name c-decl))))))
+(define (new-object class-name)
+  `(an-object ,class-name
+              ,(make-vector (roll-up-field-length class-name))))
+
+;; object-fields : Obj -> Vector
+(define (object-fields obj)
+  (pmatch obj
+    ((an-object ? ,fs) fs)
+    (? (error 'object-fields "invalid object" obj))))
+
+;; roll-up-field-length : Sym -> Int
+;; Return the total number of fields of the given class.
+(define (roll-up-field-length class-name)
+  (fold-left +
+             0
+             (unfold (lambda (c) (eqv? c 'object))
+                     (lambda (c) (length (class-name->field-ids c)))
+                     class-name->super-name
+                     class-name)))
+
+;; roll-up-field-ids : Sym -> List-of(Sym)
+;; Accumulate a list of all of the given class's fields.
+(define (roll-up-field-ids class-name)
+  (concatenate
+   (unfold (lambda (c) (eqv? c 'object))
+           class-name->field-ids
+           class-name->super-name
+           class-name)))
 
 ;; object->class-name : Obj -> Sym
 ;; (Returns the name of the class of the first part of obj.)
 (define (object->class-name obj)
   (pmatch obj
-    (() 'object)
-    (((a-part ,name ?) . ?) name)
+    ((an-object ,name ?) name)
     (? (error 'object->class-name "invalid object" obj))))
 
 ;; class-decl-super-name : Class-decl -> Sym
@@ -201,13 +218,6 @@
     (? (error 'class-decl-super-name
               "invalid class declaration"
               c-decl))))
-
-;; make-first-part : Class-decl -> Part
-(define (make-first-part c-decl)
-  (pmatch c-decl
-    ((a-class-decl ,name ? ,fields ?)
-     `(a-part ,name ,(make-vector (length fields))))
-    (? (error 'make-first-part "invalid class declaration" c-decl))))
 
 ;; find-method-and-apply : Sym x Sym x Obj x List-of(Exp) -> Exp-val
 (define (find-method-and-apply m-name host-name self args)
@@ -230,30 +240,17 @@
 (define (lookup-method-decl name method-decls)
   (find (lambda (d) (eqv? name (cadr d))) method-decls))
 
-;; view-object-as : List-of(Part) x Sym -> List-of(Part)
-(define (view-object-as parts class-name)
-  (drop-while (lambda (p)
-                (not (eqv? class-name (parts-class-name p))))
-              parts))
-
-;; build-field-env : List-of(Part) -> Env
-(define (build-field-env parts)
-  (pmatch parts
-    (() (empty-env))
-    (((a-part ,c-name ,fields) . ,rest)
-     (extend-env-refs (class-name->field-ids c-name)
-                      fields
-                      (build-field-env rest)))))
-
 ;; apply-method : Method-decl x Sym x Obj x List-of(Exp) -> Exp-val
 (define (apply-method m-decl host-name self args)
   (pmatch m-decl
     ((a-method-decl ? ,ids ,body)
      (let* ((super-name (class-name->super-name host-name))
+            (field-ids (roll-up-field-ids host-name))
+            (fields (object-fields self))
             (env (extend-env
                   `(%super self . ,ids)
-                  (cons super-name (cons self args))
-                  (build-field-env (view-object-as self host-name)))))
+                  (cons* super-name self args)
+                  (extend-env-refs field-ids fields (empty-env)))))
        (eval-expression body env)))
     (? (error 'apply-method "invalid method declaration" m-decl))))
 
